@@ -2,13 +2,15 @@
 
 ## Purpose
 
-This repository is NC Core / NC ID, the shared identity/access foundation for independent applications.
+This repository implements **QM Core / QM Identity**, the shared identity/access foundation owned by QManufacture.
+
+The repository name `nc-core` is legacy. Do not introduce new architecture terminology based on “NC Core” or “NC ID”. **NC Platform** means the separate Neuroconnect training application.
 
 Read `docs/ARCHITECTURE.md` and `PROJECT_STATE.md` before implementation changes.
 
 ## Hard boundaries
 
-NC Core owns:
+QM Core owns:
 
 - custom user identity,
 - organizations,
@@ -18,16 +20,18 @@ NC Core owns:
 - authentication/service authentication,
 - audit identity/correlation.
 
-Keep outside NC Core:
+Keep outside QM Core:
 
 - consent/document acceptance logic,
 - test/session/scoring data,
 - booking/calendar logic,
 - invoices and billing records,
-- Course/Enrollment/Material,
+- Course/CourseSession/Enrollment/Material,
 - BUR workflow logic,
 - fine-grained product authorization,
 - product-specific audit trails.
+
+Consumers include Zgodomat, VerifyTest, Booking and Neuroconnect NC Platform.
 
 ## Engineering decisions
 

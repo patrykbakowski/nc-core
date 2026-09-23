@@ -1,49 +1,38 @@
 # NC Core — Project State
 
-## Status
-
-Initialized. Architecture boundaries defined; implementation not started.
+**Updated:** 2026-09-23  
+**Status:** ACTIVE / architecture approved, implementation not started
 
 ## Purpose
 
-Provide shared identity, organization, role, entitlement and audit-identity capabilities for Neuroconnect-related applications.
+Provide shared NC ID identity/access capabilities for independent products.
 
-## Current domain
+## Current decisions
 
-NC Core should own:
+- Stack: Django + PostgreSQL + REST.
+- One deployable modular Django application; no microservices for MVP.
+- Custom Django User model from the first migration.
+- Minimal roles exist from Stage 1 and access fails closed without a valid role.
+- NC Core owns users, organizations, memberships, coarse roles, product entitlements, auth and audit identity/correlation.
+- Fine-grained product authorization stays in each product.
+- Product-specific audit trails stay in each product.
+- Course, Enrollment and Material are explicitly outside NC Core.
+- Social login/SSO is later work; no Google Cloud dependency.
+- Account linking must use a verified flow, never email-match-only.
+- `docs/ARCHITECTURE.md` was reviewed and merged to `main`.
 
-- users
-- organizations
-- memberships
-- roles / permissions
-- product entitlements
-- API authentication
-- audit identity
-
-## Explicitly outside the core
+## Outside the core
 
 - Zgodomat consent/document records
-- VerifyTest test definitions, sessions, answers and scoring
-- Booking appointments and availability
+- VerifyTest test data and scoring
+- Booking appointments/availability
 - billing/accounting
-- BUR operational workflows
-
-## Architectural intent
-
-Zgodomat, VerifyTest and Booking should remain independent products that can work alone or participate in a shared ecosystem through NC Core.
-
-## Open decisions
-
-- implementation stack
-- authentication mechanism
-- external API contract
-- tenant model details
-- entitlement model
-- deployment topology
+- Neuroconnect Course/Enrollment/Material and BUR workflows
 
 ## Next steps
 
-1. Define domain model and boundaries in more detail.
-2. Decide the smallest viable authentication/authorization architecture.
-3. Define API contracts required by the first consuming product.
-4. Only then create the implementation scaffold.
+1. Scaffold the Django project with custom User + PostgreSQL.
+2. Implement Stage 1: Organization, Membership and coarse roles from the start.
+3. Define the initial REST contract in `docs/API.md`.
+4. Add migrations and tenant-isolation tests.
+5. Integrate one real consumer only after the contract is stable enough; do not rewrite existing NC Platform staging from scratch.

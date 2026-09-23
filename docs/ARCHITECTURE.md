@@ -17,7 +17,8 @@ Neuroconnect already uses Django/PostgreSQL. KISS favors reuse. REST API. No Gra
 ### User
 - Identity: email (unique), name, phone (optional)
 - Account status: active, suspended, deleted
-- Django built-in authentication (password hashing, sessions)
+- **Custom Django User model from first migration** (use `AbstractBaseUser` or `AbstractUser`)
+- Django authentication machinery (password hashing, sessions, permissions)
 
 ### Organization
 - Name, display name, organization type
@@ -31,6 +32,7 @@ Neuroconnect already uses Django/PostgreSQL. KISS favors reuse. REST API. No Gra
 
 ### Role & Permission
 **Coarse roles owned by NC Core:**
+- `org:owner` — full control, transfer ownership
 - `org:admin` — manage organization, members, entitlements
 - `org:member` — access organization resources
 - `org:viewer` — read-only access
@@ -101,7 +103,7 @@ NC Core does NOT call product APIs. One-way dependency.
 ## Authentication Phases
 
 **MVP (Phase 1):**
-- Django `User` model, password hashing (PBKDF2 default)
+- Custom Django User model, password hashing (PBKDF2 default)
 - Django sessions (HTTP-only cookies)
 - Email/password login, logout
 - Password reset via email
@@ -154,40 +156,37 @@ Standard Django conventions. Django REST Framework for API. PostgreSQL database.
 
 ## MVP Sequence
 
-### Stage 1: Minimal Identity
-- User, Organization, Membership models
+### Stage 1: Minimal Identity & Roles
+- Custom User model (from first migration)
+- Organization, Membership, Role models
+- Coarse roles: `org:owner`, `org:admin`, `org:member` (fail closed if no role)
 - Django auth: login, logout, session management
 - REST API: `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`
-- Tenant context middleware
-- One product (Zgodomat) can authenticate users
-- **Defer:** Roles (everyone is admin), entitlements, MFA
-
-### Stage 2: Roles & Coarse Authorization
-- Role model: `org:admin`, `org:member`, `org:viewer`
-- Membership assigns role
-- Permission checks in API views/middleware
+- Tenant context middleware enforces organization membership
+- Permission checks in API views
 - Member invitation API
-- **Defer:** Product-scoped opaque roles, fine-grained permissions
+- One product (Zgodomat) can authenticate users
+- **Defer:** Entitlements (assume all products enabled), MFA, opaque product-scoped roles
 
-### Stage 3: Entitlements
+### Stage 2: Entitlements
 - Entitlement model (orgId, productId, plan, valid dates)
 - REST API: `GET /orgs/{orgId}/entitlements`, `POST /admin/entitlements`
 - Products query before granting access
 - **Defer:** Billing integration, feature flags
 
-### Stage 4: Audit & Hardening
+### Stage 3: Audit & Hardening
 - AuditRecord model (actor, org, action, subject, timestamp)
 - Audit log API (internal, products may write correlation events)
 - Rate limiting (django-ratelimit)
 - Account lockout after failed logins
 - **Defer:** MFA
 
-### Stage 5: API Keys & Service Auth
+### Stage 4: API Keys & Service Auth
 - API key model/tokens for service-to-service
 - Django REST Framework TokenAuthentication or custom
 - **Defer:** OAuth/OIDC
 
-### Stage 6: External IdP & SSO
+### Stage 5: External IdP & SSO
 - OAuth/OIDC client (django-allauth)
 - SAML for enterprise (djangosaml2 or python3-saml)
 - Verified account linking flow
@@ -205,8 +204,8 @@ Standard Django conventions. Django REST Framework for API. PostgreSQL database.
 
 ## Next Steps
 
-1. Initialize Django project with PostgreSQL
-2. Implement Stage 1 (minimal identity)
+1. Initialize Django project with custom User model and PostgreSQL
+2. Implement Stage 1 (minimal identity with roles from start)
 3. Define REST API contract in `docs/API.md`
 4. Write database migrations
 5. Integrate with Zgodomat

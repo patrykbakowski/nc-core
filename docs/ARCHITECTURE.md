@@ -1,16 +1,25 @@
-# NC Core Architecture
+# QM Core / QM Identity Architecture
+
+## Naming
+
+QManufacture owns the shared technical foundation.
+
+- **QM Core** — shared identity/access foundation.
+- **QM Identity** — identity/authentication module inside QM Core.
+- **NC Platform** — separate Neuroconnect training application and a consumer of QM Core.
+- **NC Core** and **NC ID** — deprecated architecture names. The repository remains named `patrykbakowski/nc-core` for continuity only.
 
 ## Purpose
 
-NC Core is the shared identity and access infrastructure for the Neuroconnect ecosystem. It owns users, organizations, memberships, coarse roles/permissions, product entitlements, API authentication and audit identity correlation.
+QM Core is the shared identity and access infrastructure for QManufacture products and external clients such as Neuroconnect NC Platform. It owns users, organizations, memberships, coarse roles/permissions, product entitlements, API authentication and audit identity correlation.
 
-**NC Core is infrastructure, not a product backend.** It does NOT own product business logic or data.
+**QM Core is infrastructure, not a product backend.** It does NOT own product business logic or data.
 
 ## Implementation Stack
 
 **Django + PostgreSQL.**
 
-Neuroconnect already uses Django/PostgreSQL. KISS favors reuse. REST API. No GraphQL in MVP. No microservices.
+KISS favors a small, reusable identity/access foundation. REST API. No GraphQL in MVP. No microservices.
 
 ## Domain Model
 
@@ -31,49 +40,61 @@ Neuroconnect already uses Django/PostgreSQL. KISS favors reuse. REST API. No Gra
 - Invitation metadata
 
 ### Role & Permission
-**Coarse roles owned by NC Core:**
+**Coarse roles owned by QM Core:**
 - `org:owner` — full control, transfer ownership
 - `org:admin` — manage organization, members, entitlements
 - `org:member` — access organization resources
 - `org:viewer` — read-only access
 
-**Fine-grained authorization stays in products.** Products define and enforce their own rules (e.g., "may edit consent document X") using NC Core identity context. Products MAY pass opaque scopes (e.g., `zgodomat:editor`) to NC Core for storage, but NC Core does not interpret them.
+**Fine-grained authorization stays in products.** Products define and enforce their own rules (e.g., "may edit consent document X") using QM Identity context. Products MAY pass opaque scopes (e.g., `zgodomat:editor`) to QM Core for storage, but QM Core does not interpret them.
 
 ### Product Entitlement
-- OrganizationId + ProductId (`zgodomat`, `verifytest`, `booking`)
+- OrganizationId + ProductId (`zgodomat`, `verifytest`, `booking`, `neuroconnect-training`)
 - Plan/tier, valid from/until, status
 - Products query entitlements before granting access
 
 ### API Authentication
 Django sessions initially. API keys for service-to-service added later. OAuth/OIDC providers prepared for SSO but not implemented in MVP.
 
-**Do not implement crypto/token/OAuth protocols from scratch.** Use Django auth, standards-compliant libraries (e.g., `django-oauth-toolkit`, `social-auth-app-django`) when SSO is added.
+**Do not implement crypto/token/OAuth protocols from scratch.** Use Django auth and standards-compliant libraries when SSO is added.
 
 ### Audit Identity
-NC Core logs identity/access changes: user created, member invited, role assigned, entitlement granted. Provides actor/tenant correlation (who, which org, when).
+QM Core logs identity/access changes: user created, member invited, role assigned, entitlement granted. Provides actor/tenant correlation (who, which org, when).
 
-**Product-specific audit trails stay in products** (e.g., "consent document viewed"). NC Core is not a dumping ground for all product events.
+**Product-specific audit trails stay in products** (e.g., "consent document viewed"). QM Core is not a dumping ground for all product events.
 
 ## Data Ownership Boundaries
 
 | Concern                              | Owner         |
 |--------------------------------------|---------------|
-| User identity, credentials           | **NC Core**   |
-| Organizations, memberships, roles    | **NC Core**   |
-| Product entitlements                 | **NC Core**   |
-| Authentication, sessions, API keys   | **NC Core**   |
-| Audit: identity/access actions       | **NC Core**   |
+| User identity, credentials           | **QM Core / QM Identity** |
+| Organizations, memberships, roles    | **QM Core**   |
+| Product entitlements                 | **QM Core**   |
+| Authentication, sessions, API keys   | **QM Identity** |
+| Audit: identity/access actions       | **QM Core**   |
 | Consent documents, acceptance logs   | Zgodomat      |
 | Tests, sessions, answers, scoring    | VerifyTest    |
 | Appointments, availability           | Booking       |
 | Invoices, payments                   | Billing       |
-| Training courses, enrollments        | Neuroconnect  |
+| Training courses, enrollments        | Neuroconnect NC Platform |
 
-**Explicit boundary:** Neuroconnect training domain (Course, Enrollment, Material) is NOT NC Core.
+**Explicit boundary:** Neuroconnect training domain (Course, CourseSession, Enrollment, Material) is NOT QM Core.
+
+## Consumers
+
+QM Core is consumed by:
+
+- Zgodomat,
+- VerifyTest,
+- Booking,
+- Neuroconnect NC Platform,
+- future QManufacture products with a genuine shared identity/access requirement.
+
+Each consumer remains independently deployable/sellable at product level and keeps its domain data outside QM Core.
 
 ## Integration Contract
 
-Products call NC Core REST API:
+Products call QM Core REST API:
 
 1. **Authentication** — `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`
 2. **Authorization** — `GET /orgs/{orgId}/members/me/roles`, `GET /orgs/{orgId}/entitlements`
@@ -82,12 +103,12 @@ Products call NC Core REST API:
 **Example:**
 
 ```
-User → Zgodomat → NC Core: GET /auth/me
+User → Zgodomat → QM Core: GET /auth/me
                     ← { userId, orgId, roles: ["org:member"], entitlements: [{product: "zgodomat", plan: "professional"}] }
 Zgodomat enforces its own rules using this context.
 ```
 
-NC Core does NOT call product APIs. One-way dependency.
+QM Core does NOT own or orchestrate product business workflows.
 
 ## Tenant Boundaries
 
@@ -113,7 +134,7 @@ NC Core does NOT call product APIs. One-way dependency.
 - Multi-factor authentication (django-otp)
 
 **Phase 3:**
-- External IdP via OAuth/OIDC (django-allauth or social-auth-app-django)
+- External IdP via OAuth/OIDC
 - SAML for enterprise SSO
 - **Account linking requires verified linking flow** — never link solely because emails match
 
@@ -124,32 +145,32 @@ NC Core does NOT call product APIs. One-way dependency.
 One deployable modular Django project:
 
 ```
-nc_core/
+nc_core/                 # legacy repository/package name may remain during migration
 ├── manage.py
-├── nc_core/              (project settings)
+├── nc_core/
 │   ├── settings/
 │   ├── urls.py
 │   └── wsgi.py
-├── users/                (Django app)
-│   ├── models.py         (User, extended profile)
+├── users/               # QM Identity
+│   ├── models.py
 │   ├── views.py
 │   ├── serializers.py
 │   └── tests.py
-├── organizations/        (Django app)
-│   ├── models.py         (Organization, Membership, Role)
+├── organizations/
+│   ├── models.py
 │   ├── views.py
 │   └── tests.py
-├── entitlements/         (Django app)
-│   ├── models.py         (Entitlement)
+├── entitlements/
+│   ├── models.py
 │   └── views.py
-├── audit/                (Django app)
-│   ├── models.py         (AuditRecord)
+├── audit/
+│   ├── models.py
 │   └── views.py
-├── api/                  (REST API routes, middleware)
+├── api/
 │   ├── v1/
-│   ├── middleware.py     (tenant context, auth)
+│   ├── middleware.py
 │   └── permissions.py
-└── tests/                (integration, e2e)
+└── tests/
 ```
 
 Standard Django conventions. Django REST Framework for API. PostgreSQL database.
@@ -165,7 +186,7 @@ Standard Django conventions. Django REST Framework for API. PostgreSQL database.
 - Tenant context middleware enforces organization membership
 - Permission checks in API views
 - Member invitation API
-- One product (Zgodomat) can authenticate users
+- One real consumer can authenticate users
 - **Defer:** Entitlements (assume all products enabled), MFA, opaque product-scoped roles
 
 ### Stage 2: Entitlements
@@ -177,7 +198,7 @@ Standard Django conventions. Django REST Framework for API. PostgreSQL database.
 ### Stage 3: Audit & Hardening
 - AuditRecord model (actor, org, action, subject, timestamp)
 - Audit log API (internal, products may write correlation events)
-- Rate limiting (django-ratelimit)
+- Rate limiting
 - Account lockout after failed logins
 - **Defer:** MFA
 
@@ -187,28 +208,29 @@ Standard Django conventions. Django REST Framework for API. PostgreSQL database.
 - **Defer:** OAuth/OIDC
 
 ### Stage 5: External IdP & SSO
-- OAuth/OIDC client (django-allauth)
-- SAML for enterprise (djangosaml2 or python3-saml)
+- OAuth/OIDC client
+- SAML for enterprise
 - Verified account linking flow
 - **Defer:** Advanced MFA options
 
 ## Security Notes
 
-- Use Django's built-in password hashing (PBKDF2 default, configure for Argon2 if needed)
+- Use Django's built-in password hashing
 - HTTPS required for production
 - Django's CSRF protection enabled
 - Secrets in environment variables, never committed
-- Rotate database credentials, SECRET_KEY regularly
+- Rotate database credentials and SECRET_KEY according to operational policy
 - Multi-tenant isolation tests in CI
 - Audit all privilege escalation (role grants, entitlement changes)
 
 ## Next Steps
 
-1. Initialize Django project with custom User model and PostgreSQL
-2. Implement Stage 1 (minimal identity with roles from start)
-3. Define REST API contract in `docs/API.md`
-4. Write database migrations
-5. Integrate with Zgodomat
-6. Deploy to staging environment
+1. Select the first real consumer and define the minimal API contract.
+2. Initialize Django project with custom User model and PostgreSQL.
+3. Implement Stage 1 (minimal identity with roles from start).
+4. Define REST API contract in `docs/API.md`.
+5. Write database migrations and tenant-isolation tests.
+6. Integrate the selected consumer.
+7. Deploy to staging.
 
 Keep it practical. Build for real product needs, not generic IAM abstractions.

@@ -1,11 +1,20 @@
-# NC Core — Project State
+# QM Core / QM Identity — Project State
 
 **Updated:** 2026-09-23  
-**Status:** READY / NC ID architecture approved; implementation gated by a real consumer
+**Repository:** `patrykbakowski/nc-core` (legacy repository name)  
+**Status:** READY / QM Core identity-access architecture approved; implementation gated by a real consumer
 
 ## Purpose
 
-Provide shared NC ID identity/access capabilities for independent products.
+Provide shared identity/access capabilities owned by QManufacture and usable by independent products plus Neuroconnect NC Platform.
+
+## Naming decision
+
+- **QManufacture** owns the shared technical foundation.
+- **QM Core** is that shared foundation.
+- **QM Identity** is the identity/authentication module inside QM Core.
+- **NC Platform** means only the Neuroconnect training application.
+- **NC Core** and **NC ID** are deprecated names. The repository name `nc-core` remains unchanged for now to avoid a cosmetic rename with integration cost.
 
 ## Current decisions
 
@@ -13,14 +22,21 @@ Provide shared NC ID identity/access capabilities for independent products.
 - One deployable modular Django application; no microservices for MVP.
 - Custom Django User model from the first migration.
 - Minimal roles exist from Stage 1 and access fails closed without a valid role.
-- NC Core owns users, organizations, memberships, coarse roles, product entitlements, auth and audit identity/correlation.
+- QM Core owns users, organizations, memberships, coarse roles, product entitlements, auth and audit identity/correlation.
 - Fine-grained product authorization stays in each product.
 - Product-specific audit trails stay in each product.
-- Course, Enrollment and Material are explicitly outside NC Core.
+- Course, CourseSession, Enrollment and Material are explicitly outside QM Core.
 - Social login/SSO is later work; no Google Cloud dependency.
 - Account linking must use a verified flow, never email-match-only.
 - `docs/ARCHITECTURE.md` was reviewed and merged to `main`.
 - Preferred development flow: `ai-orchestrator` → Cursor → PR → review/CI.
+
+## Consumers
+
+- Zgodomat
+- VerifyTest
+- Booking
+- Neuroconnect NC Platform
 
 ## Outside the core
 
@@ -28,7 +44,7 @@ Provide shared NC ID identity/access capabilities for independent products.
 - VerifyTest test data and scoring
 - Booking appointments/availability
 - billing/accounting
-- Neuroconnect Course/Enrollment/Material and BUR workflows
+- Neuroconnect Course/CourseSession/Enrollment/Material and BUR workflows
 
 ## Portfolio priority
 

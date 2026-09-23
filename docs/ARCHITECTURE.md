@@ -2,367 +2,214 @@
 
 ## Purpose
 
-NC Core is the shared identity and access infrastructure for the Neuroconnect ecosystem. It provides a stable foundation for independent products (Zgodomat, VerifyTest, Booking) to authenticate users, enforce organization boundaries, manage roles and permissions, and audit security-relevant actions.
+NC Core is the shared identity and access infrastructure for the Neuroconnect ecosystem. It owns users, organizations, memberships, coarse roles/permissions, product entitlements, API authentication and audit identity correlation.
 
-## Core Principle
+**NC Core is infrastructure, not a product backend.** It does NOT own product business logic or data.
 
-**NC Core is infrastructure, not a product backend.**
+## Implementation Stack
 
-It answers identity and access questions. It does NOT own product business logic or data.
+**Django + PostgreSQL.**
+
+Neuroconnect already uses Django/PostgreSQL. KISS favors reuse. REST API. No GraphQL in MVP. No microservices.
 
 ## Domain Model
 
 ### User
-
-- **UserId** (primary identifier)
-- Basic profile: email, name, phone (optional)
-- Authentication credentials (hashed passwords, OAuth tokens, MFA secrets)
+- Identity: email (unique), name, phone (optional)
 - Account status: active, suspended, deleted
-- Created/updated timestamps
-
-**Owned by NC Core.** Product-specific profile data (consent history, test results, booking preferences) stays in respective products.
+- Django built-in authentication (password hashing, sessions)
 
 ### Organization
-
-- **OrganizationId** (primary identifier)
-- Name, display name
-- Organization type: clinic, practice, enterprise, individual
+- Name, display name, organization type
 - Tenant isolation boundary
 - Status: active, suspended, deleted
-- Created/updated timestamps
-
-**Owned by NC Core.** Product-specific organization data (billing details, clinic branding, test configurations) stays in respective products.
 
 ### Membership
-
-- **MembershipId**
-- UserId + OrganizationId (a user may belong to multiple organizations)
-- Role(s) within that organization
+- User belongs to Organization with Role
 - Status: active, invited, suspended
-- Invitation/acceptance metadata
-- Created/updated timestamps
-
-**Owned by NC Core.**
+- Invitation metadata
 
 ### Role & Permission
+**Coarse roles owned by NC Core:**
+- `org:admin` — manage organization, members, entitlements
+- `org:member` — access organization resources
+- `org:viewer` — read-only access
 
-**Roles:**
-- Predefined system roles: `org:admin`, `org:member`, `org:viewer`
-- Product-scoped roles: `zgodomat:editor`, `verifytest:psychologist`, `booking:scheduler`
-
-**Permissions:**
-- Action-based: `user:read`, `user:write`, `member:invite`, `entitlement:grant`
-- Product-scoped: `zgodomat:consent:view`, `verifytest:test:administer`, `booking:appointment:create`
-
-**Model:**
-- Role = named collection of permissions
-- Roles assigned per membership (organization context)
-- Permissions enforced at API/service layer
-
-**Owned by NC Core.** Product-specific authorization logic (e.g., "may edit this specific consent document") is evaluated by the product using NC Core identity context.
+**Fine-grained authorization stays in products.** Products define and enforce their own rules (e.g., "may edit consent document X") using NC Core identity context. Products MAY pass opaque scopes (e.g., `zgodomat:editor`) to NC Core for storage, but NC Core does not interpret them.
 
 ### Product Entitlement
+- OrganizationId + ProductId (`zgodomat`, `verifytest`, `booking`)
+- Plan/tier, valid from/until, status
+- Products query entitlements before granting access
 
-- **EntitlementId**
-- OrganizationId
-- ProductId: `zgodomat`, `verifytest`, `booking`
-- Plan/tier: `basic`, `professional`, `enterprise`, or custom
-- Feature flags: optional JSON blob for product-specific toggles
-- Valid from/until (subscription period)
-- Status: active, expired, suspended
+### API Authentication
+Django sessions initially. API keys for service-to-service added later. OAuth/OIDC providers prepared for SSO but not implemented in MVP.
 
-**Owned by NC Core.** Billing transactions, invoices, payment methods remain in the billing system. NC Core reflects the entitlement state only.
+**Do not implement crypto/token/OAuth protocols from scratch.** Use Django auth, standards-compliant libraries (e.g., `django-oauth-toolkit`, `social-auth-app-django`) when SSO is added.
 
-### API Authentication Token
+### Audit Identity
+NC Core logs identity/access changes: user created, member invited, role assigned, entitlement granted. Provides actor/tenant correlation (who, which org, when).
 
-- **TokenId**
-- UserId + OrganizationId (scope)
-- Token type: `session`, `api_key`, `service_account`
-- Token hash (never store plaintext)
-- Scopes/permissions (optional subset)
-- Expiration, revocation
-- Created/last-used timestamps
-
-**Owned by NC Core.**
-
-### Audit Identity Record
-
-- **AuditId**
-- Timestamp
-- Actor: UserId or ServiceAccountId
-- OrganizationId (tenant context)
-- Action: `user.created`, `member.invited`, `entitlement.granted`, `role.assigned`
-- Subject: affected resource (UserId, MembershipId, EntitlementId)
-- Metadata: IP, user-agent, request context (non-secret only)
-
-**Owned by NC Core.** Product-specific audit trails (e.g., "consent document viewed") are owned by respective products but may reference NC Core identities.
+**Product-specific audit trails stay in products** (e.g., "consent document viewed"). NC Core is not a dumping ground for all product events.
 
 ## Data Ownership Boundaries
 
 | Concern                              | Owner         |
 |--------------------------------------|---------------|
-| User identity, credentials, MFA      | **NC Core**   |
+| User identity, credentials           | **NC Core**   |
 | Organizations, memberships, roles    | **NC Core**   |
 | Product entitlements                 | **NC Core**   |
-| API tokens, authentication           | **NC Core**   |
-| Audit identity (who did what)        | **NC Core**   |
+| Authentication, sessions, API keys   | **NC Core**   |
+| Audit: identity/access actions       | **NC Core**   |
 | Consent documents, acceptance logs   | Zgodomat      |
-| Psychological tests, sessions, scores| VerifyTest    |
-| Appointments, availability, calendar | Booking       |
-| Invoices, payments, accounting       | Billing       |
-| BUR training workflows               | Neuroconnect  |
+| Tests, sessions, answers, scoring    | VerifyTest    |
+| Appointments, availability           | Booking       |
+| Invoices, payments                   | Billing       |
+| Training courses, enrollments        | Neuroconnect  |
 
-## Architecture
+**Explicit boundary:** Neuroconnect training domain (Course, Enrollment, Material) is NOT NC Core.
 
-### Topology
+## Integration Contract
 
-**Single-service application.**
+Products call NC Core REST API:
 
-NC Core is deployed as one conventional web application with:
-- HTTP API (REST or GraphQL)
-- Relational database (PostgreSQL recommended)
-- Optional read replica for high query load
+1. **Authentication** — `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`
+2. **Authorization** — `GET /orgs/{orgId}/members/me/roles`, `GET /orgs/{orgId}/entitlements`
+3. **Management** — `POST /orgs/{orgId}/members/invite`, `PUT /members/{id}/role`, `POST /admin/entitlements`
 
-**No microservices** unless real operational boundaries demand them (e.g., separating audit write path for compliance isolation). Start simple.
-
-### Integration Contract
-
-Products integrate with NC Core via:
-
-1. **Authentication API** — verify tokens, retrieve user identity and organization context
-2. **Authorization API** — check permissions, retrieve roles and entitlements
-3. **Management API** — create users, invite members, grant roles, manage entitlements (admin operations)
-4. **Audit API** — write audit records for cross-product actions (optional)
-
-**Example flow:**
+**Example:**
 
 ```
-User → Zgodomat frontend → Zgodomat backend
-                               ↓
-                         NC Core API: verify token
-                               ↓
-                         returns: { userId, orgId, roles, entitlements }
-                               ↓
-                         Zgodomat: enforce product logic
+User → Zgodomat → NC Core: GET /auth/me
+                    ← { userId, orgId, roles: ["org:member"], entitlements: [{product: "zgodomat", plan: "professional"}] }
+Zgodomat enforces its own rules using this context.
 ```
 
-NC Core does NOT call product APIs. Products call NC Core.
+NC Core does NOT call product APIs. One-way dependency.
 
-### Tenant Boundaries
+## Tenant Boundaries
 
-**OrganizationId is the tenant isolation key.**
+**OrganizationId enforces tenant isolation.**
 
-- All queries MUST filter by OrganizationId.
-- Multi-tenant database: single schema, row-level tenant enforcement.
-- No cross-tenant data leakage in queries or APIs.
-- Service accounts may have multi-org scope (for admin operations only).
+- Django middleware loads tenant context from authenticated user
+- Views/APIs enforce organization membership before data access
+- Test suite includes multi-tenant isolation tests
+- Service accounts may span orgs (admin operations only)
 
-### Authentication Options
+**Avoid simplistic claims.** Not every query in every product literally filters `OrganizationId`. The principle: enforce tenant context consistently, test isolation, prevent cross-tenant leakage.
 
-**Phase 1 (MVP):**
-- Username/password with bcrypt
-- Session tokens (HTTP-only cookies or Bearer tokens)
-- Optional: email-based password reset
+## Authentication Phases
+
+**MVP (Phase 1):**
+- Django `User` model, password hashing (PBKDF2 default)
+- Django sessions (HTTP-only cookies)
+- Email/password login, logout
+- Password reset via email
 
 **Phase 2:**
-- OAuth 2.0 / OpenID Connect (support external IdPs: Google, Microsoft, custom SAML)
-- Multi-factor authentication (TOTP)
+- API keys (Django REST Framework tokens or custom)
+- Multi-factor authentication (django-otp)
 
 **Phase 3:**
-- API keys for service-to-service
-- Refresh tokens
-- SSO for enterprise customers
+- External IdP via OAuth/OIDC (django-allauth or social-auth-app-django)
+- SAML for enterprise SSO
+- **Account linking requires verified linking flow** — never link solely because emails match
 
-**Decision:** Do not lock into a cloud provider's identity service (e.g., Firebase Auth, AWS Cognito). Keep authentication portable. Consider open-source options (e.g., Keycloak, Ory, self-hosted OAuth) or implement standard flows in-app.
+**Prepared but not now:** Social login (Google, Microsoft). No Google Cloud dependency.
 
-**Avoid:** Google Cloud-specific dependencies.
+## Django Application Structure
 
-### Authorization Model
-
-**Least-privilege by default.**
-
-- Users see only their own organizations.
-- Organization members see only their organization's data.
-- Roles grant incremental permissions.
-- Products enforce fine-grained rules (e.g., "edit only your own consent documents") using NC Core context.
-
-**Enforcement layers:**
-
-1. **API gateway** — verify token, load identity context
-2. **Service layer** — check organization membership and role permissions
-3. **Product layer** — apply product-specific rules
-
-### Data Retention & Privacy
-
-- Store only identity/access data; never duplicate product data.
-- Support GDPR/RODO: user deletion cascades to memberships, tokens, audit logs (anonymize or delete per policy).
-- Audit logs: retain for compliance period, anonymize after user deletion.
-
-## Proposed Directory Structure
-
-Assuming a conventional server-side web application (stack TBD):
+One deployable modular Django project:
 
 ```
-nc-core/
-├── docs/
-│   ├── ARCHITECTURE.md       (this file)
-│   ├── API.md                (API contract spec)
-│   └── DEPLOYMENT.md         (deployment guide)
-├── src/
-│   ├── domain/
-│   │   ├── user/
-│   │   ├── organization/
-│   │   ├── membership/
-│   │   ├── role/
-│   │   ├── entitlement/
-│   │   ├── auth/             (authentication, token management)
-│   │   └── audit/
-│   ├── api/
-│   │   ├── http/             (REST/GraphQL routes)
-│   │   └── middleware/       (auth, tenant context)
-│   ├── storage/
-│   │   ├── migrations/
-│   │   └── repositories/     (data access layer)
-│   ├── service/              (business logic, orchestration)
-│   └── config/
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   └── e2e/
-├── migrations/               (database schema versions)
-├── scripts/                  (setup, seed, admin tools)
-├── README.md
-├── AGENTS.md
-├── PROJECT_STATE.md
-└── [build config, dependencies]
+nc_core/
+├── manage.py
+├── nc_core/              (project settings)
+│   ├── settings/
+│   ├── urls.py
+│   └── wsgi.py
+├── users/                (Django app)
+│   ├── models.py         (User, extended profile)
+│   ├── views.py
+│   ├── serializers.py
+│   └── tests.py
+├── organizations/        (Django app)
+│   ├── models.py         (Organization, Membership, Role)
+│   ├── views.py
+│   └── tests.py
+├── entitlements/         (Django app)
+│   ├── models.py         (Entitlement)
+│   └── views.py
+├── audit/                (Django app)
+│   ├── models.py         (AuditRecord)
+│   └── views.py
+├── api/                  (REST API routes, middleware)
+│   ├── v1/
+│   ├── middleware.py     (tenant context, auth)
+│   └── permissions.py
+└── tests/                (integration, e2e)
 ```
 
-Adapt to chosen stack. Key principle: separate domain logic from API and storage.
+Standard Django conventions. Django REST Framework for API. PostgreSQL database.
 
 ## MVP Sequence
 
-### Stage 0: Foundation (current)
-- ✅ Define boundaries and architecture
-- ✅ Document domain model
-
 ### Stage 1: Minimal Identity
-**Goal:** One product (e.g., Zgodomat) can authenticate users.
+- User, Organization, Membership models
+- Django auth: login, logout, session management
+- REST API: `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`
+- Tenant context middleware
+- One product (Zgodomat) can authenticate users
+- **Defer:** Roles (everyone is admin), entitlements, MFA
 
-Implement:
-- User entity (id, email, password hash, name, status)
-- Organization entity (id, name, status)
-- Membership entity (user + org)
-- Basic authentication API: `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`
-- Session token management
-- Database schema + migrations
-- Tenant-aware queries (enforce organizationId filter)
-
-**Defer:**
-- Roles, permissions (everyone is admin in their org)
-- Entitlements (assume all products enabled)
-- MFA, OAuth
-- Audit logging
-
-### Stage 2: Roles & Permissions
-**Goal:** Distinguish admins from members.
-
-Add:
-- Role entity (predefined: `org:admin`, `org:member`, `org:viewer`)
-- Permission checks in API middleware
-- Membership role assignment
-- API: `GET /orgs/{orgId}/members`, `POST /orgs/{orgId}/members/invite`, `PUT /members/{id}/role`
-
-**Defer:**
-- Fine-grained product-scoped roles
-- Custom roles
+### Stage 2: Roles & Coarse Authorization
+- Role model: `org:admin`, `org:member`, `org:viewer`
+- Membership assigns role
+- Permission checks in API views/middleware
+- Member invitation API
+- **Defer:** Product-scoped opaque roles, fine-grained permissions
 
 ### Stage 3: Entitlements
-**Goal:** Products check which features are enabled per organization.
+- Entitlement model (orgId, productId, plan, valid dates)
+- REST API: `GET /orgs/{orgId}/entitlements`, `POST /admin/entitlements`
+- Products query before granting access
+- **Defer:** Billing integration, feature flags
 
-Add:
-- Entitlement entity (orgId, productId, plan, valid dates)
-- API: `GET /orgs/{orgId}/entitlements`, `POST /admin/entitlements` (admin-only grant)
-- Products query entitlements before allowing access
+### Stage 4: Audit & Hardening
+- AuditRecord model (actor, org, action, subject, timestamp)
+- Audit log API (internal, products may write correlation events)
+- Rate limiting (django-ratelimit)
+- Account lockout after failed logins
+- **Defer:** MFA
 
-**Defer:**
-- Automatic billing integration
-- Feature flag granularity
+### Stage 5: API Keys & Service Auth
+- API key model/tokens for service-to-service
+- Django REST Framework TokenAuthentication or custom
+- **Defer:** OAuth/OIDC
 
-### Stage 4: Audit & Security Hardening
-**Goal:** Track who did what, harden authentication.
+### Stage 6: External IdP & SSO
+- OAuth/OIDC client (django-allauth)
+- SAML for enterprise (djangosaml2 or python3-saml)
+- Verified account linking flow
+- **Defer:** Advanced MFA options
 
-Add:
-- Audit record entity
-- Audit API: `POST /audit/record` (called by products)
-- MFA (TOTP)
-- API key support for service-to-service
-- Rate limiting, brute-force protection
+## Security Notes
 
-### Stage 5: External IdP & SSO
-**Goal:** Enterprise customers use their own identity providers.
+- Use Django's built-in password hashing (PBKDF2 default, configure for Argon2 if needed)
+- HTTPS required for production
+- Django's CSRF protection enabled
+- Secrets in environment variables, never committed
+- Rotate database credentials, SECRET_KEY regularly
+- Multi-tenant isolation tests in CI
+- Audit all privilege escalation (role grants, entitlement changes)
 
-Add:
-- OAuth 2.0 / OIDC client support
-- SAML integration (optional)
-- Account linking (external IdP user → NC Core user)
+## Next Steps
 
-### Stage 6: Advanced Authorization
-**Goal:** Fine-grained, product-scoped roles and permissions.
+1. Initialize Django project with PostgreSQL
+2. Implement Stage 1 (minimal identity)
+3. Define REST API contract in `docs/API.md`
+4. Write database migrations
+5. Integrate with Zgodomat
+6. Deploy to staging environment
 
-Add:
-- Custom roles (define permission sets per organization)
-- Product-scoped permissions (`zgodomat:consent:view`, etc.)
-- Permission inheritance and delegation
-
-## Decision Points
-
-| Decision                     | Recommendation                          | Status      |
-|------------------------------|-----------------------------------------|-------------|
-| Implementation stack         | TBD (consider: Node.js, Python, Go, Elixir) | Open    |
-| Database                     | PostgreSQL (proven, tenant-safe)        | Open        |
-| API style                    | REST (simple) or GraphQL (flexible)     | Open        |
-| Authentication library       | Standard JWT + bcrypt, or Ory/Keycloak  | Open        |
-| Deployment                   | Docker + managed DB, or PaaS            | Open        |
-| Avoid                        | Google Cloud lock-in, microservices     | **Decided** |
-
-## Integration Example
-
-### Zgodomat authenticates a user:
-
-1. User submits login form to Zgodomat frontend.
-2. Zgodomat backend calls `POST /auth/login` on NC Core with email + password.
-3. NC Core verifies credentials, returns session token + user/org context.
-4. Zgodomat stores token, includes it in subsequent API requests.
-5. Zgodomat calls `GET /auth/me` on NC Core to retrieve current user/org/roles.
-6. Zgodomat enforces its own business rules (e.g., "may edit consent document X") using NC Core identity context.
-
-### VerifyTest checks entitlement:
-
-1. User accesses VerifyTest.
-2. VerifyTest backend verifies token via NC Core.
-3. VerifyTest calls `GET /orgs/{orgId}/entitlements?product=verifytest`.
-4. NC Core returns entitlement record: `{ plan: "professional", features: [...] }`.
-5. VerifyTest allows or denies access to premium features accordingly.
-
-## Security Considerations
-
-- **Never log plaintext passwords, tokens, or credentials.**
-- Hash passwords with bcrypt (cost factor ≥ 12).
-- Use HTTPS for all API communication.
-- Rotate secrets (database passwords, JWT signing keys) regularly.
-- Enforce rate limits on authentication endpoints.
-- Implement account lockout after N failed login attempts.
-- Audit all privilege escalation actions (role grants, entitlement changes).
-
-## Conclusion
-
-This architecture keeps NC Core minimal, focused, and infrastructure-scoped. It avoids premature complexity (no microservices, no vendor lock-in) while providing a stable foundation for independent products to share identity and access.
-
-**Next steps:**
-1. Choose implementation stack.
-2. Implement Stage 1 (minimal identity).
-3. Define REST API contract in `docs/API.md`.
-4. Build database schema and migrations.
-5. Integrate with first product (Zgodomat).
-
-Keep it simple. Iterate based on real product needs.
+Keep it practical. Build for real product needs, not generic IAM abstractions.

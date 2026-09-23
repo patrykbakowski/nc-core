@@ -2,57 +2,56 @@
 
 ## Purpose
 
-This repository is the shared identity/access core for the Neuroconnect application ecosystem.
+This repository is NC Core / NC ID, the shared identity/access foundation for independent applications.
+
+Read `docs/ARCHITECTURE.md` and `PROJECT_STATE.md` before implementation changes.
 
 ## Hard boundaries
 
-NC Core owns identity and access concerns only.
+NC Core owns:
 
-Allowed core concepts include:
+- custom user identity,
+- organizations,
+- memberships,
+- coarse roles/permissions,
+- product entitlements,
+- authentication/service authentication,
+- audit identity/correlation.
 
-- user identity
-- organizations
-- memberships
-- roles and permissions
-- product entitlements
-- API authentication
-- audit identity
+Keep outside NC Core:
 
-Do not move product-specific business logic into this repository.
+- consent/document acceptance logic,
+- test/session/scoring data,
+- booking/calendar logic,
+- invoices and billing records,
+- Course/Enrollment/Material,
+- BUR workflow logic,
+- fine-grained product authorization,
+- product-specific audit trails.
 
-In particular, keep these outside NC Core:
+## Engineering decisions
 
-- consent/document acceptance logic
-- psychological or assessment test data
-- booking/calendar logic
-- invoices and billing records
-- BUR workflow logic
+- Django + PostgreSQL + REST.
+- One deployable modular Django application initially.
+- Custom Django User model from the first migration.
+- Use Django authentication/session primitives; do not implement auth/crypto protocols from scratch.
+- Minimal coarse roles exist from the start; fail closed without valid membership/role.
+- No microservices or GraphQL without a concrete requirement.
+- Social login/SSO is later work; do not add a Google Cloud dependency.
+- Account linking requires a verified flow, never email matching alone.
 
-## Engineering principles
+## Security and data
 
-- Prefer KISS and minimal architecture.
-- Do not introduce microservices unless a real boundary requires them.
-- Keep public contracts stable and explicit.
-- Prefer additive changes over breaking changes.
-- Enforce tenant/organization boundaries consistently.
-- Use least-privilege authorization.
-- Treat authentication, authorization and audit identity as security-sensitive code.
-- Never log or expose secrets or credentials.
-- Never commit secrets, tokens, passwords or local environment data.
-
-## Data and privacy
-
-- Store only data necessary for identity/access responsibilities.
-- Do not duplicate product-owned sensitive data into the core for convenience.
-- Audit security-relevant actions without logging secret material.
+- Enforce tenant/organization boundaries consistently and test cross-tenant isolation.
+- Use least privilege.
+- Store only identity/access data necessary for this core.
+- Never log or commit secrets, tokens, credentials or local environment data.
 - Keep authorization decisions deterministic and testable.
-
-## Validation
-
-No canonical implementation stack or test command is defined yet.
-
-Before adding tooling, inspect the current repository and use only real project commands. Do not invent framework conventions or test commands before the stack is chosen.
 
 ## Documentation
 
-Any change to domain boundaries, identity model, authorization model or external API contract must be reflected in `README.md` and `PROJECT_STATE.md`.
+Changes to identity model, tenant boundaries, public API contracts or domain ownership must update `README.md`, `PROJECT_STATE.md` and `docs/ARCHITECTURE.md`.
+
+## Validation
+
+Run only real repository test/lint commands. Do not invent tooling that has not been added.

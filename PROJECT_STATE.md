@@ -2,7 +2,7 @@
 
 **Updated:** 2026-09-25  
 **Repository:** `patrykbakowski/nc-core` (legacy repository name)  
-**Status:** ACTIVE / Stage 1 identity-access implementation started
+**Status:** ACTIVE / Stage 1 merged to main; Zgodomat integration next
 
 ## Purpose
 
@@ -20,7 +20,7 @@ Provide shared identity/access capabilities owned by QManufacture and usable by 
 
 **Zgodomat** is the first real consumer. The minimal contract is documented in `docs/API.md`.
 
-The first slice intentionally exposes only:
+The merged Stage 1 slice intentionally exposes only:
 - email/password session authentication;
 - current user and active organization memberships;
 - coarse organization role;
@@ -28,7 +28,7 @@ The first slice intentionally exposes only:
 
 Zgodomat still owns documents, versions, requests, acceptance evidence, product audit trail and fine-grained authorization.
 
-## Implemented in Stage 1 slice
+## Implemented in Stage 1
 
 - Django project package `qm_core`;
 - custom Django User from the first migration;
@@ -50,10 +50,13 @@ Zgodomat still owns documents, versions, requests, acceptance evidence, product 
 - Account linking must use a verified flow, never email-match-only.
 - Cross-domain SSO/service auth is deferred. The current Django session contract is a first staging slice, not the final multi-domain identity design.
 
+## Current delivery state
+
+Stage 1 was merged to `main` on 2026-09-25 in squash commit `c30a9a1d01f2df5ebff9716bc6191f6c3c296dd5` after PostgreSQL CI passed.
+
 ## Next steps
 
-1. Get the Stage 1 branch through CI and merge after review.
-2. Integrate the existing Zgodomat pilot against the minimal access-context contract without moving Zgodomat domain data into QM Core.
-3. Add the smallest missing account lifecycle pieces required by that integration, likely password reset/invitation before public pilot use.
-4. Add service authentication/OIDC only when separate product deployment makes it necessary.
-5. Keep VerifyTest and Booking queued until their real use cases justify implementation.
+1. Integrate the existing Zgodomat pilot against the minimal access-context contract without moving Zgodomat domain data into QM Core.
+2. Add the smallest missing account lifecycle pieces required by that integration, likely password reset/invitation before public pilot use.
+3. Add service authentication/OIDC only when separate product deployment makes it necessary.
+4. Keep VerifyTest and Booking queued until their real use cases justify implementation.

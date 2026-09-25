@@ -31,7 +31,7 @@ Zgodomat still owns documents, versions, requests, acceptance evidence, product 
 ## Implemented in Stage 1
 
 - Django project package `qm_core`;
-- custom Django User from the first migration;
+- custom Django User from the first migration, with UUID primary key and email as `USERNAME_FIELD`;
 - Organization and Membership with fail-closed coarse roles;
 - ProductEntitlement with status and validity window;
 - `POST /api/v1/auth/login/`;
@@ -52,7 +52,7 @@ Zgodomat still owns documents, versions, requests, acceptance evidence, product 
 
 ## Current delivery state
 
-Stage 1 was merged to `main` on 2026-09-25 in squash commit `c30a9a1d01f2df5ebff9716bc6191f6c3c296dd5` after PostgreSQL CI passed.
+Stage 1 was merged to `main` on 2026-09-25 in squash commit `c30a9a1d01f2df5ebff9716bc6191f6c3c296dd5` after PostgreSQL CI passed. Live Zgodomat staging then exposed an identity-model mismatch (legacy pilot already uses UUID/email-native users), so follow-up alignment is being applied before the first QM Core deployment.
 
 ## Next steps
 

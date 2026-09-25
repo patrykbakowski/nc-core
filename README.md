@@ -53,3 +53,22 @@ The reviewed architecture is in `docs/ARCHITECTURE.md`.
 Independent products can work alone while using QM Core/QM Identity for shared identity and access. Social login/SSO is prepared for later but not implemented now.
 
 See `PROJECT_STATE.md` for current status.
+
+
+## Current implementation slice
+
+Zgodomat is the first real consumer. The first executable Stage 1 slice now lives in this repository and includes custom User, Organization, Membership, coarse roles, ProductEntitlement and the minimal REST contract in `docs/API.md`.
+
+The current auth mechanism is Django session + email/password for staging validation. It is not the final cross-domain SSO design.
+
+### Local development
+
+Use PostgreSQL by default. For a deliberately local-only smoke test, set `QM_DATABASE_ENGINE=sqlite`.
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py test
+```

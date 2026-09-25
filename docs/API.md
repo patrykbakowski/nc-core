@@ -6,7 +6,7 @@ Zgodomat is the first real consumer of QM Core / QM Identity. This contract deli
 
 ## Authentication model for this slice
 
-QM Identity uses Django sessions and email/password login. This is suitable for the first same-origin/staging integration and automated contract tests.
+QM Identity uses Django sessions and email/password login. User and organization identifiers are UUIDs, and email is the native Django authentication identifier (there is no separate username field). This is suitable for the first same-origin/staging integration and automated contract tests.
 
 It is **not** the final cross-domain SSO design. Separate product domains will later use standards-based OIDC/service authentication. Do not share cookies across unrelated registrable domains and do not link accounts by matching email alone.
 

@@ -8,7 +8,7 @@ class User(AbstractUser):
         SUSPENDED = "suspended", "Suspended"
         DELETED = "deleted", "Deleted"
 
-    email = models.EmailField(unique=True)
+    email = models.EmailField("email address", unique=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
 
     def __str__(self):

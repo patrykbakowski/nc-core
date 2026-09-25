@@ -1,8 +1,8 @@
 # QM Core / QM Identity — Project State
 
-**Updated:** 2026-09-23  
+**Updated:** 2026-09-25  
 **Repository:** `patrykbakowski/nc-core` (legacy repository name)  
-**Status:** READY / QM Core identity-access architecture approved; implementation gated by a real consumer
+**Status:** ACTIVE / Stage 1 identity-access implementation started
 
 ## Purpose
 
@@ -14,46 +14,46 @@ Provide shared identity/access capabilities owned by QManufacture and usable by 
 - **QM Core** is that shared foundation.
 - **QM Identity** is the identity/authentication module inside QM Core.
 - **NC Platform** means only the Neuroconnect training application.
-- **NC Core** and **NC ID** are deprecated names. The repository name `nc-core` remains unchanged for now to avoid a cosmetic rename with integration cost.
+- **NC Core** and **NC ID** are deprecated names. The repository name `nc-core` remains unchanged for continuity.
 
-## Current decisions
+## First real consumer
 
-- Stack: Django + PostgreSQL + REST.
-- One deployable modular Django application; no microservices for MVP.
-- Custom Django User model from the first migration.
-- Minimal roles exist from Stage 1 and access fails closed without a valid role.
-- QM Core owns users, organizations, memberships, coarse roles, product entitlements, auth and audit identity/correlation.
+**Zgodomat** is the first real consumer. The minimal contract is documented in `docs/API.md`.
+
+The first slice intentionally exposes only:
+- email/password session authentication;
+- current user and active organization memberships;
+- coarse organization role;
+- product entitlement lookup for a requested organization/product.
+
+Zgodomat still owns documents, versions, requests, acceptance evidence, product audit trail and fine-grained authorization.
+
+## Implemented in Stage 1 slice
+
+- Django project package `qm_core`;
+- custom Django User from the first migration;
+- Organization and Membership with fail-closed coarse roles;
+- ProductEntitlement with status and validity window;
+- `POST /api/v1/auth/login/`;
+- `POST /api/v1/auth/logout/`;
+- `GET /api/v1/auth/me/`;
+- `GET /api/v1/access-context/`;
+- tenant-isolation and entitlement tests;
+- PostgreSQL GitHub Actions CI;
+- no Google Cloud, social login, billing or product-domain models.
+
+## Boundaries preserved
+
 - Fine-grained product authorization stays in each product.
 - Product-specific audit trails stay in each product.
-- Course, CourseSession, Enrollment and Material are explicitly outside QM Core.
-- Social login/SSO is later work; no Google Cloud dependency.
+- Course, CourseSession, Enrollment and Material remain outside QM Core.
 - Account linking must use a verified flow, never email-match-only.
-- `docs/ARCHITECTURE.md` was reviewed and merged to `main`.
-- Preferred development flow: `ai-orchestrator` → Cursor → PR → review/CI.
-
-## Consumers
-
-- Zgodomat
-- VerifyTest
-- Booking
-- Neuroconnect NC Platform
-
-## Outside the core
-
-- Zgodomat consent/document records
-- VerifyTest test data and scoring
-- Booking appointments/availability
-- billing/accounting
-- Neuroconnect Course/CourseSession/Enrollment/Material and BUR workflows
-
-## Portfolio priority
-
-The project is separated organizationally, but coding should not start just because the repository exists. Start implementation when a real consuming product and minimal API contract are identified.
+- Cross-domain SSO/service auth is deferred. The current Django session contract is a first staging slice, not the final multi-domain identity design.
 
 ## Next steps
 
-1. Choose the first real consumer and define the minimal REST contract.
-2. Scaffold the Django project with custom User + PostgreSQL.
-3. Implement Organization, Membership and coarse roles from the start.
-4. Add migrations and tenant-isolation tests.
-5. Integrate one real consumer without rewriting the existing Neuroconnect staging from scratch.
+1. Get the Stage 1 branch through CI and merge after review.
+2. Integrate the existing Zgodomat pilot against the minimal access-context contract without moving Zgodomat domain data into QM Core.
+3. Add the smallest missing account lifecycle pieces required by that integration, likely password reset/invitation before public pilot use.
+4. Add service authentication/OIDC only when separate product deployment makes it necessary.
+5. Keep VerifyTest and Booking queued until their real use cases justify implementation.

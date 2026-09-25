@@ -221,10 +221,11 @@ Standard Django conventions. Django REST Framework for API. PostgreSQL database.
 
 ## Next Steps
 
-1. Run CI and review the first Stage 1 implementation.
-2. Integrate the existing Zgodomat pilot against `docs/API.md`.
-3. Add only account-lifecycle capabilities proven necessary by that pilot.
-4. Introduce service authentication/OIDC when independent product deployment requires cross-domain identity.
-5. Deploy QM Core to staging after the Zgodomat integration path is verified.
+Stage 1 is merged to `main`. The next executable step is integration rather than more generic identity abstraction:
+
+1. Integrate the existing Zgodomat pilot against `docs/API.md`.
+2. Add only account-lifecycle capabilities proven necessary by that pilot.
+3. Introduce service authentication/OIDC when independent product deployment requires cross-domain identity.
+4. Deploy QM Core to staging after the Zgodomat integration path is verified.
 
 Keep it practical. Build for real product needs, not generic IAM abstractions.

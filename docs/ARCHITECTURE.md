@@ -94,19 +94,14 @@ Each consumer remains independently deployable/sellable at product level and kee
 
 ## Integration Contract
 
-Products call QM Core REST API:
+The first real consumer is **Zgodomat**. The executable v1 contract is intentionally smaller than the eventual platform API and is documented in `docs/API.md`:
 
-1. **Authentication** — `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`
-2. **Authorization** — `GET /orgs/{orgId}/members/me/roles`, `GET /orgs/{orgId}/entitlements`
-3. **Management** — `POST /orgs/{orgId}/members/invite`, `PUT /members/{id}/role`, `POST /admin/entitlements`
+1. **Authentication** — `POST /api/v1/auth/login/`, `GET /api/v1/auth/me/`, `POST /api/v1/auth/logout/`.
+2. **Access context** — `GET /api/v1/access-context/?organization_id=<uuid>&product=zgodomat`.
 
-**Example:**
+The access-context response contains only identity, active organization membership, coarse role and active product entitlement. Zgodomat applies its own document/request/evidence authorization.
 
-```
-User → Zgodomat → QM Core: GET /auth/me
-                    ← { userId, orgId, roles: ["org:member"], entitlements: [{product: "zgodomat", plan: "professional"}] }
-Zgodomat enforces its own rules using this context.
-```
+Django sessions are the first staging mechanism. They are not the final cross-domain SSO design. Separate product domains will later require standards-based OIDC/service authentication rather than shared cookies.
 
 QM Core does NOT own or orchestrate product business workflows.
 
@@ -145,9 +140,9 @@ QM Core does NOT own or orchestrate product business workflows.
 One deployable modular Django project:
 
 ```
-nc_core/                 # legacy repository/package name may remain during migration
+qm_core/
 ├── manage.py
-├── nc_core/
+├── qm_core/
 │   ├── settings/
 │   ├── urls.py
 │   └── wsgi.py
@@ -187,7 +182,8 @@ Standard Django conventions. Django REST Framework for API. PostgreSQL database.
 - Permission checks in API views
 - Member invitation API
 - One real consumer can authenticate users
-- **Defer:** Entitlements (assume all products enabled), MFA, opaque product-scoped roles
+- Minimal ProductEntitlement is included because Zgodomat needs an explicit product-access check from the first real contract
+- **Defer:** MFA, service auth, opaque product-scoped roles
 
 ### Stage 2: Entitlements
 - Entitlement model (orgId, productId, plan, valid dates)
@@ -225,12 +221,10 @@ Standard Django conventions. Django REST Framework for API. PostgreSQL database.
 
 ## Next Steps
 
-1. Select the first real consumer and define the minimal API contract.
-2. Initialize Django project with custom User model and PostgreSQL.
-3. Implement Stage 1 (minimal identity with roles from start).
-4. Define REST API contract in `docs/API.md`.
-5. Write database migrations and tenant-isolation tests.
-6. Integrate the selected consumer.
-7. Deploy to staging.
+1. Run CI and review the first Stage 1 implementation.
+2. Integrate the existing Zgodomat pilot against `docs/API.md`.
+3. Add only account-lifecycle capabilities proven necessary by that pilot.
+4. Introduce service authentication/OIDC when independent product deployment requires cross-domain identity.
+5. Deploy QM Core to staging after the Zgodomat integration path is verified.
 
 Keep it practical. Build for real product needs, not generic IAM abstractions.

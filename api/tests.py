@@ -1,4 +1,5 @@
 from datetime import timedelta
+import uuid
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -15,12 +16,10 @@ class AccessContextTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.user = User.objects.create_user(
-            username="user@example.com",
             email="user@example.com",
             password="correct horse battery staple",
         )
         self.other_user = User.objects.create_user(
-            username="other@example.com",
             email="other@example.com",
             password="other password 123",
         )
@@ -50,7 +49,12 @@ class AccessContextTests(TestCase):
         )
 
     def test_email_login_and_me(self):
-        response = self.login()
+        self.assertIsInstance(self.user.pk, uuid.UUID)
+        response = self.client.post(
+            "/api/v1/auth/login/",
+            {"email": self.user.email.upper(), "password": "correct horse battery staple"},
+            format="json",
+        )
         self.assertEqual(response.status_code, 200)
 
         response = self.client.get("/api/v1/auth/me/")

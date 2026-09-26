@@ -31,11 +31,7 @@ class LoginView(APIView):
         email = serializer.validated_data["email"].strip().lower()
         password = serializer.validated_data["password"]
 
-        user = User.objects.filter(email__iexact=email).first()
-        if not user:
-            raise AuthenticationFailed("Invalid credentials.")
-
-        authenticated = authenticate(request, username=user.username, password=password)
+        authenticated = authenticate(request, email=email, password=password)
         if not authenticated or not authenticated.is_active or authenticated.status != User.Status.ACTIVE:
             raise AuthenticationFailed("Invalid credentials.")
 

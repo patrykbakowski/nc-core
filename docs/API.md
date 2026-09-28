@@ -1,16 +1,29 @@
-# QM Core API v1 — minimal Zgodomat contract
+# QM Core API v1
 
-**Status:** first implementation slice, not production SSO.
+QM Core / QM Identity exposes two authentication modes:
 
-Zgodomat is the first real consumer of QM Core / QM Identity. This contract deliberately covers only identity, organization membership and product entitlement. Zgodomat continues to own documents, document versions, acceptance requests, acceptance evidence and all product-specific authorization.
+- Django session authentication for the central account UI, admin and same-origin testing;
+- OAuth2 bearer authentication for product integrations.
 
-## Authentication model for this slice
+For separate product domains, use OIDC Authorization Code + PKCE and bearer tokens. Do not share cookies across unrelated registrable domains.
 
-QM Identity uses Django sessions and email/password login. User and organization identifiers are UUIDs, and email is the native Django authentication identifier (there is no separate username field). This is suitable for the first same-origin/staging integration and automated contract tests.
+## OIDC provider
 
-It is **not** the final cross-domain SSO design. Separate product domains will later use standards-based OIDC/service authentication. Do not share cookies across unrelated registrable domains and do not link accounts by matching email alone.
+Provider routes are mounted under `/o/`.
 
-## Endpoints
+When production is configured with `QM_OIDC_ISSUER=https://account.qmanufacture.com/o`, clients use OIDC discovery and should not hard-code endpoint details.
+
+Product clients request:
+
+```text
+openid profile email qm.access
+```
+
+`qm.access` is required only when the client needs the QM organization/product access endpoint.
+
+The stable user identifier is the OIDC `sub`, which is the QM User UUID. Never link accounts solely because email addresses match.
+
+## Session endpoints
 
 ### POST /api/v1/auth/login/
 
@@ -24,35 +37,90 @@ Creates a Django session for an active QM Identity user.
 
 ### POST /api/v1/auth/logout/
 
-Ends the current session.
+Ends the current Django session.
 
 ### GET /api/v1/auth/me/
 
-Returns the authenticated user and active memberships in active organizations. It does not expose product-domain data.
+Returns the authenticated user and active memberships in active organizations.
 
-### GET /api/v1/access-context/?organization_id=<uuid>&product=zgodomat
+It accepts either a valid Django session or an OAuth2 bearer token.
 
-Returns the minimum context Zgodomat needs before applying its own authorization:
+Example response:
+
+```json
+{
+  "user": {
+    "id": "uuid",
+    "email": "person@example.com",
+    "first_name": "Pat",
+    "last_name": "Example"
+  },
+  "memberships": [
+    {
+      "id": "uuid",
+      "organization": {
+        "id": "uuid",
+        "name": "Example Org",
+        "slug": "example"
+      },
+      "role": "org:admin"
+    }
+  ]
+}
+```
+
+## Runtime access context
+
+### GET /api/v1/access-context/?organization_id=<uuid>&product=<product-id>
+
+Returns the minimum context a product needs before applying its own fine-grained authorization.
+
+OAuth bearer calls require scope `qm.access`.
+
+Example:
 
 ```json
 {
   "user": {"id":"...","email":"person@example.com"},
   "organization": {"id":"...","name":"Example","slug":"example"},
   "membership": {"id":"...","role":"org:admin"},
-  "entitlement": {"id":"...","product":"zgodomat","plan":"pilot","valid_from":null,"valid_until":null}
+  "entitlement": {
+    "id":"...",
+    "product":"zgodomat",
+    "plan":"pilot",
+    "valid_from":null,
+    "valid_until":null
+  }
 }
 ```
 
-The request fails closed when the user is unauthenticated, the membership or organization is inactive, or the product entitlement is unavailable or outside its validity window.
+The request fails closed when:
 
-Cross-tenant membership failures return 404 to avoid confirming another tenant's membership relationship. Missing/inactive entitlement returns 403.
+- the user is not authenticated or the QM account is inactive;
+- membership is inactive;
+- organization is inactive;
+- the entitlement is missing, inactive or outside its validity window;
+- an OAuth token lacks `qm.access`.
 
-## Ownership boundary
+Cross-tenant membership failures return 404. Missing/inactive entitlement returns 403.
 
-QM Core owns user identity, organization, membership/coarse role and product entitlement.
+## Authorization boundary
 
-Zgodomat owns documents and versions, acceptance requests, acceptance/withdrawal records, evidence/audit trail and fine-grained product authorization.
+QM Core owns identity, organization, membership/coarse role and product entitlement.
 
-## Deferred intentionally
+Products own their business data and fine-grained permissions. The presence of an entitlement means the organization can use the product; it does not answer whether the current user can perform every action inside that product.
 
-Public registration, invitations, password-reset UI, service API keys, OAuth/OIDC/SAML, social login, MFA, billing and product-specific permission catalogues remain deferred until a real integration requires them.
+## Deliberately not encoded in ID tokens
+
+Do not put current roles or product entitlements into long-lived ID-token claims. Products query current access when they need an authorization decision so suspension or entitlement revocation is not delayed until token renewal.
+
+## Still deferred
+
+- external social login (Google/Facebook/Microsoft),
+- SAML,
+- public self-registration,
+- invitation workflow,
+- password-reset UI,
+- MFA,
+- billing integration,
+- product-specific permission catalogues.

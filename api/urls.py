@@ -5,6 +5,7 @@ from .views import (
     LoginView,
     LogoutView,
     MeView,
+    ServiceAccessContextView,
 )
 
 urlpatterns = [
@@ -12,6 +13,11 @@ urlpatterns = [
     path("auth/logout/", LogoutView.as_view(), name="auth-logout"),
     path("auth/me/", MeView.as_view(), name="auth-me"),
     path("access-context/", AccessContextView.as_view(), name="access-context"),
+    path(
+        "service/access-context/",
+        ServiceAccessContextView.as_view(),
+        name="service-access-context",
+    ),
     path(
         "accounts/invitations/",
         InvitationProvisionView.as_view(),

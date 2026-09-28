@@ -92,7 +92,7 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_URL = "/accounts/login/"
-LOGIN_REDIRECT_URL = "/"
+LOGIN_REDIRECT_URL = "/api/v1/auth/me/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 
 SESSION_COOKIE_HTTPONLY = True
@@ -113,6 +113,7 @@ OAUTH2_PROVIDER = {
     "OIDC_ENABLED": bool(OIDC_RSA_PRIVATE_KEY),
     "OIDC_RSA_PRIVATE_KEY": OIDC_RSA_PRIVATE_KEY,
     "OIDC_ISS_ENDPOINT": OIDC_ISSUER,
+    "OIDC_RP_INITIATED_LOGOUT_ENABLED": True,
     "OAUTH2_VALIDATOR_CLASS": "users.oauth_validators.QMOAuth2Validator",
     "SCOPES": {
         "openid": "OpenID Connect identity",

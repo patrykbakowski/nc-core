@@ -16,12 +16,14 @@ from users.invitations import invitation_path
 from .permissions import (
     HasQMAccessScopeOrSession,
     HasQMProvisionScope,
+    HasQMServiceAccessScope,
     IsActiveQMUser,
 )
 from .serializers import (
     AccessContextQuerySerializer,
     InvitationSerializer,
     LoginSerializer,
+    ServiceAccessContextQuerySerializer,
 )
 
 User = get_user_model()
@@ -33,6 +35,47 @@ def user_payload(user):
         "email": user.email,
         "first_name": user.first_name,
         "last_name": user.last_name,
+    }
+
+
+def _resolve_access_context(user, organization_id, product):
+    membership = get_object_or_404(
+        Membership.objects.select_related("organization"),
+        user=user,
+        organization_id=organization_id,
+        status=Membership.Status.ACTIVE,
+        organization__status=Organization.Status.ACTIVE,
+    )
+
+    entitlement = (
+        ProductEntitlement.objects
+        .filter(organization=membership.organization, product_id=product)
+        .first()
+    )
+    if not entitlement or not entitlement.is_active_at():
+        raise PermissionDenied("Organization has no active entitlement for this product.")
+    return membership, entitlement
+
+
+def _access_context_payload(user, membership, entitlement):
+    return {
+        "user": user_payload(user),
+        "organization": {
+            "id": str(membership.organization_id),
+            "name": membership.organization.name,
+            "slug": membership.organization.slug,
+        },
+        "membership": {
+            "id": str(membership.pk),
+            "role": membership.role,
+        },
+        "entitlement": {
+            "id": str(entitlement.pk),
+            "product": entitlement.product_id,
+            "plan": entitlement.plan,
+            "valid_from": entitlement.valid_from,
+            "valid_until": entitlement.valid_until,
+        },
     }
 
 
@@ -110,46 +153,34 @@ class AccessContextView(APIView):
     def get(self, request):
         serializer = AccessContextQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
-        organization_id = serializer.validated_data["organization_id"]
-        product = serializer.validated_data["product"]
-
-        membership = get_object_or_404(
-            Membership.objects.select_related("organization"),
-            user=request.user,
-            organization_id=organization_id,
-            status=Membership.Status.ACTIVE,
-            organization__status=Organization.Status.ACTIVE,
+        membership, entitlement = _resolve_access_context(
+            request.user,
+            serializer.validated_data["organization_id"],
+            serializer.validated_data["product"],
         )
+        return Response(_access_context_payload(request.user, membership, entitlement))
 
-        entitlement = (
-            ProductEntitlement.objects
-            .filter(organization=membership.organization, product_id=product)
-            .first()
-        )
-        if not entitlement or not entitlement.is_active_at():
-            raise PermissionDenied("Organization has no active entitlement for this product.")
 
-        return Response(
-            {
-                "user": user_payload(request.user),
-                "organization": {
-                    "id": str(membership.organization_id),
-                    "name": membership.organization.name,
-                    "slug": membership.organization.slug,
-                },
-                "membership": {
-                    "id": str(membership.pk),
-                    "role": membership.role,
-                },
-                "entitlement": {
-                    "id": str(entitlement.pk),
-                    "product": entitlement.product_id,
-                    "plan": entitlement.plan,
-                    "valid_from": entitlement.valid_from,
-                    "valid_until": entitlement.valid_until,
-                },
-            }
+class ServiceAccessContextView(APIView):
+    authentication_classes = [OAuth2Authentication]
+    permission_classes = [HasQMServiceAccessScope]
+
+    def get(self, request):
+        serializer = ServiceAccessContextQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+
+        user = get_object_or_404(
+            User,
+            pk=serializer.validated_data["user_id"],
+            is_active=True,
+            status=User.Status.ACTIVE,
         )
+        membership, entitlement = _resolve_access_context(
+            user,
+            serializer.validated_data["organization_id"],
+            serializer.validated_data["product"],
+        )
+        return Response(_access_context_payload(user, membership, entitlement))
 
 
 class InvitationProvisionView(APIView):
@@ -191,10 +222,7 @@ class InvitationProvisionView(APIView):
                     status=User.Status.ACTIVE,
                 )
 
-            activation_url = (
-                settings.QM_ACCOUNT_PUBLIC_ORIGIN
-                + invitation_path(user)
-            )
+            activation_url = settings.QM_ACCOUNT_PUBLIC_ORIGIN + invitation_path(user)
             send_mail(
                 "Aktywacja konta QM Identity",
                 (

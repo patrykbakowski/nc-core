@@ -19,7 +19,7 @@ Product clients request:
 openid profile email qm.access
 ```
 
-`qm.access` is required only when the client needs the QM organization/product access endpoint.
+`qm.access` is required only when the client needs the QM organization/product access endpoint. Backend service clients that provision central accounts use a separate `qm.provision` scope and Client Credentials; they do not receive user identity through that token.
 
 The stable user identifier is the OIDC `sub`, which is the QM User UUID. Never link accounts solely because email addresses match.
 
@@ -113,6 +113,38 @@ Products own their business data and fine-grained permissions. The presence of a
 ## Deliberately not encoded in ID tokens
 
 Do not put current roles or product entitlements into long-lived ID-token claims. Products query current access when they need an authorization decision so suspension or entitlement revocation is not delayed until token renewal.
+
+## Central account provisioning
+
+### POST /api/v1/accounts/invitations/
+
+This endpoint is for trusted product backends, not browsers. It requires an OAuth2 access token issued with the Client Credentials grant and the `qm.provision` scope.
+
+Request:
+
+```json
+{"email":"person@example.com"}
+```
+
+Behavior:
+
+- if no account exists, QM Identity creates an inactive UUID account with an unusable password and sends a central activation link;
+- if the account is already active, no invitation is sent and the existing UUID is returned;
+- if the account is pending, the invitation is reissued and the previous invitation token becomes invalid;
+- suspended/deleted accounts are never reactivated by a product service;
+- creating/inviting an account grants no organization membership, role or product entitlement.
+
+A successful response contains the central user UUID and state (`active` or `pending`). Product code may create a local shadow/profile keyed by that UUID, but QM Identity remains the credential authority.
+
+## Central account UI
+
+QM Identity owns:
+
+- `/accounts/login/`;
+- `/accounts/password-reset/`;
+- `/accounts/invite/<uid>/<token>/`.
+
+Password reset deliberately sends mail only for active QM accounts and does not reveal whether an account exists.
 
 ## Still deferred
 

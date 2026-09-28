@@ -1,6 +1,9 @@
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, login, logout
-from django.db import connection
+from django.core.mail import send_mail
+from django.db import connection, transaction
 from django.shortcuts import get_object_or_404
+from oauth2_provider.contrib.rest_framework import OAuth2Authentication
 from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 from rest_framework.permissions import AllowAny
@@ -9,8 +12,17 @@ from rest_framework.views import APIView
 
 from entitlements.models import ProductEntitlement
 from organizations.models import Membership, Organization
-from .permissions import HasQMAccessScopeOrSession, IsActiveQMUser
-from .serializers import AccessContextQuerySerializer, LoginSerializer
+from users.invitations import invitation_path
+from .permissions import (
+    HasQMAccessScopeOrSession,
+    HasQMProvisionScope,
+    IsActiveQMUser,
+)
+from .serializers import (
+    AccessContextQuerySerializer,
+    InvitationSerializer,
+    LoginSerializer,
+)
 
 User = get_user_model()
 
@@ -137,4 +149,69 @@ class AccessContextView(APIView):
                     "valid_until": entitlement.valid_until,
                 },
             }
+        )
+
+
+class InvitationProvisionView(APIView):
+    authentication_classes = [OAuth2Authentication]
+    permission_classes = [HasQMProvisionScope]
+
+    def post(self, request):
+        serializer = InvitationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = User.objects.normalize_email(
+            serializer.validated_data["email"]
+        ).strip().lower()
+
+        with transaction.atomic():
+            user = User.objects.select_for_update().filter(email=email).first()
+            created = user is None
+
+            if user is not None:
+                if user.status != User.Status.ACTIVE:
+                    return Response(
+                        {"detail": "account_unavailable"},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                if user.is_active:
+                    return Response(
+                        {
+                            "user": user_payload(user),
+                            "state": "active",
+                            "invitation_sent": False,
+                        }
+                    )
+                user.set_unusable_password()
+                user.save(update_fields=["password"])
+            else:
+                user = User.objects.create_user(
+                    email=email,
+                    password=None,
+                    is_active=False,
+                    status=User.Status.ACTIVE,
+                )
+
+            activation_url = (
+                settings.QM_ACCOUNT_PUBLIC_ORIGIN
+                + invitation_path(user)
+            )
+            send_mail(
+                "Aktywacja konta QM Identity",
+                (
+                    "Utworzono lub ponowiono zaproszenie do wspólnego konta "
+                    "QManufacture. Ustaw hasło korzystając z linku:\n\n"
+                    + activation_url
+                    + "\n\nLink jest jednorazowy i wygasa po 24 godzinach."
+                ),
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
+            )
+
+        return Response(
+            {
+                "user": user_payload(user),
+                "state": "pending",
+                "invitation_sent": True,
+            },
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )

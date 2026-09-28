@@ -9,3 +9,7 @@ class LoginSerializer(serializers.Serializer):
 class AccessContextQuerySerializer(serializers.Serializer):
     organization_id = serializers.UUIDField()
     product = serializers.SlugField(max_length=64)
+
+
+class InvitationSerializer(serializers.Serializer):
+    email = serializers.EmailField()

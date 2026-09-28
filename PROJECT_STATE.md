@@ -2,79 +2,112 @@
 
 **Updated:** 2026-09-28  
 **Repository:** `patrykbakowski/nc-core` (legacy repository name)  
-**Status:** ACTIVE / cross-domain Identity foundation in implementation
+**Status:** ACTIVE / cross-domain Identity foundation ready for clean staging after CI
 
 ## Purpose
 
-Provide shared identity/access capabilities owned by QManufacture and usable by independent products without moving their business domains into the core.
+Provide one shared identity/access authority owned by QManufacture and usable by independent products without moving their business domains into the core.
 
-## Naming decision
+## Canonical identity model
 
-- **QManufacture** owns the shared technical foundation.
-- **QM Core** is that shared foundation.
-- **QM Identity** is the identity/authentication module inside QM Core.
-- **NC Core** and **NC ID** are deprecated names. The repository name remains unchanged for continuity.
+QM Identity owns:
 
-## Implemented on main before this slice
+- UUID/email-native User;
+- verified ExternalIdentity links;
+- Organization;
+- Membership with coarse role;
+- ProductEntitlement;
+- authentication/OIDC;
+- identity/access correlation.
 
-- Django + PostgreSQL project;
-- custom User with UUID primary key and email as `USERNAME_FIELD`;
-- Organization and Membership;
-- coarse roles `org:owner`, `org:admin`, `org:member`, `org:viewer`;
-- ProductEntitlement with status and validity window;
-- email/password session login/logout/me;
-- generic `GET /api/v1/access-context/`;
-- fail-closed tenant and entitlement tests;
-- PostgreSQL CI;
-- no Google Cloud and no social-login dependency.
+Products own fine-grained authorization and product audit evidence.
 
-## Current Identity slice
+## Main before PR #4
 
-The previous session-only contract is insufficient for independent products on different registrable domains. The active implementation therefore adds the cross-domain foundation now rather than postponing it.
+Already implemented:
 
-Current branch: `feature/qm-identity-oidc-foundation`.
+- UUID User with email as native Django login identifier;
+- Organization/Membership;
+- roles `org:owner`, `org:admin`, `org:member`, `org:viewer`;
+- ProductEntitlement;
+- session login/logout/me;
+- runtime `GET /api/v1/access-context/`;
+- tenant/entitlement tests;
+- PostgreSQL CI.
 
-Included:
+## PR #4 — cross-domain QM Identity
 
-- Django OAuth Toolkit as the standards-based OAuth2/OIDC provider;
-- OIDC Authorization Code + PKCE;
-- RSA-signed ID tokens when `QM_OIDC_RSA_PRIVATE_KEY` is configured;
-- central browser login at `/accounts/login/`;
-- OIDC discovery/JWKS/UserInfo through the provider routes under `/o/`;
-- OAuth2 bearer authentication for the existing REST API;
-- scope `qm.access` for runtime organization/product access checks;
-- stable identity claims only in OIDC; roles/entitlements remain runtime data;
-- central account-status enforcement for both new authentication and existing sessions;
+Branch: `feature/qm-identity-oidc-foundation`.
+
+Implemented:
+
+- standards-based OAuth2/OIDC provider through Django OAuth Toolkit;
+- Authorization Code + PKCE;
+- central browser login;
+- OIDC discovery/JWKS/UserInfo;
+- RSA-signed ID tokens when a deployment key is supplied;
+- OAuth2 bearer authentication for the REST API;
+- `qm.access` scope for current organization/product access;
+- stable identity claims only; roles and entitlements stay runtime-authoritative;
+- suspended/deleted accounts cannot create a new session and existing central sessions are dropped;
 - RP-initiated logout support;
-- product integration contract in `docs/IDENTITY_INTEGRATION.md`.
+- verified `ExternalIdentity` model for future/legacy account linking;
+- non-root Gunicorn Docker image;
+- database-backed `/healthz/`;
+- proxy/secure-cookie deployment settings;
+- product integration contract;
+- clean deployment/cutover procedure;
+- one-time legacy snapshot importer preserving UUIDs and password hashes;
+- CI generates an ephemeral RSA key and verifies live OIDC discovery/JWKS.
 
-## Boundary that remains unchanged
+## Legacy state to migrate
 
-QM Identity answers:
+The former mixed QManufacture staging is not the target architecture. It currently contains the compatibility identity source:
 
-- who is the user?
-- which organizations is the user an active member of?
-- what coarse organization role do they have?
-- does the organization currently have an entitlement to product X?
+- 2 users;
+- 1 organization;
+- 1 membership;
+- 2 product accesses;
+- 0 external identity links.
 
-Each product still answers its own domain questions, for example whether a particular document may be edited, a test may be scored or an appointment may be changed.
+Its UUID/email-native user model is close enough to the new QM Identity model for a lossless one-time mapping.
 
-## Deployment requirements for OIDC
+The old mixed staging remains unchanged until clean QM Identity staging is verified. After cutover it must not remain a second authoritative identity store.
 
-Production OIDC requires:
+## OIDC deployment requirements
 
-- `QM_OIDC_RSA_PRIVATE_KEY` supplied as a secret, never committed;
-- `QM_OIDC_ISSUER=https://account.qmanufacture.com/o` (planned production issuer);
+Production target issuer:
+
+```text
+https://account.qmanufacture.com/o
+```
+
+A staging issuer may use an environment-specific technical HTTPS hostname.
+
+Required:
+
+- generated RSA signing key stored only as a deployment secret;
 - HTTPS;
-- exact registered redirect URIs for every client;
-- a registered OAuth/OIDC Application per product deployment.
+- exact redirect URIs;
+- separate OIDC Application per independently deployed client;
+- product integrations identify users by `sub`, never email matching.
 
-No external social provider is required.
+No Google Cloud or external social provider is required.
 
-## Next after this slice
+## Current next sequence
 
-1. pass repository CI and merge the OIDC foundation;
-2. deploy QM Identity to staging with a generated RSA key;
-3. register the first real OIDC client (Zgodomat) and perform end-to-end browser login;
-4. add the smallest account-lifecycle features required by the pilot: password reset and invitations;
-5. then integrate VerifiTest and Booking against the same contract, without creating new identity stores.
+1. final CI for PR #4;
+2. merge PR #4;
+3. deploy clean QM Identity staging with its own PostgreSQL database;
+4. export the legacy identity source and run importer dry-run;
+5. import and verify counts/UUIDs/password authentication;
+6. publish staging OIDC issuer over HTTPS;
+7. register Zgodomat as first real client and run browser Authorization Code + PKCE end to end;
+8. then add central password reset/invitations and onboard VerifiTest/Booking to the same contract.
+
+See:
+
+- `docs/ARCHITECTURE.md`;
+- `docs/API.md`;
+- `docs/IDENTITY_INTEGRATION.md`;
+- `docs/DEPLOYMENT.md`.

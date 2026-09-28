@@ -196,3 +196,59 @@ class AccessContextTests(TestCase):
             {"organization_id": str(self.org.pk), "product": "zgodomat"},
         )
         self.assertEqual(response.status_code, 404)
+
+    def service_token(self, scope="qm.access"):
+        application = Application.objects.create(
+            name="QM service test",
+            client_type="confidential",
+            authorization_grant_type="client-credentials",
+        )
+        token = AccessToken.objects.create(
+            user=None,
+            application=application,
+            token=f"service-token-{uuid.uuid4()}",
+            expires=timezone.now() + timedelta(minutes=10),
+            scope=scope,
+        )
+        self.client.force_authenticate(token=token)
+        return token
+
+    def test_service_access_context_for_known_user(self):
+        self.service_token()
+        response = self.client.get(
+            "/api/v1/service/access-context/",
+            {
+                "user_id": str(self.user.pk),
+                "organization_id": str(self.org.pk),
+                "product": "zgodomat",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["user"]["id"], str(self.user.pk))
+        self.assertEqual(response.data["membership"]["role"], Membership.Role.ADMIN)
+
+    def test_service_access_context_requires_qm_access_scope(self):
+        self.service_token(scope="qm.provision")
+        response = self.client.get(
+            "/api/v1/service/access-context/",
+            {
+                "user_id": str(self.user.pk),
+                "organization_id": str(self.org.pk),
+                "product": "zgodomat",
+            },
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_service_access_context_hides_suspended_user(self):
+        self.user.status = User.Status.SUSPENDED
+        self.user.save(update_fields=["status"])
+        self.service_token()
+        response = self.client.get(
+            "/api/v1/service/access-context/",
+            {
+                "user_id": str(self.user.pk),
+                "organization_id": str(self.org.pk),
+                "product": "zgodomat",
+            },
+        )
+        self.assertEqual(response.status_code, 404)

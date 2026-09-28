@@ -10,7 +10,7 @@ QManufacture owns the shared technical foundation.
 
 ## Purpose
 
-QM Core is shared identity and access infrastructure for QManufacture products and optional external clients. It owns users, organizations, memberships, coarse roles, product entitlements, authentication and audit identity correlation.
+QM Core is shared identity and access infrastructure for QManufacture products and optional external clients. It owns users, verified external identity links, organizations, memberships, coarse roles, product entitlements, authentication and audit identity correlation.
 
 **QM Core is infrastructure, not a product backend.** It does not own product business logic or product-domain data.
 
@@ -20,6 +20,7 @@ QM Core is shared identity and access infrastructure for QManufacture products a
 - REST;
 - Django sessions for central/same-origin use;
 - Django OAuth Toolkit for standards-based OAuth2/OIDC;
+- Gunicorn container runtime;
 - one deployable modular application;
 - no GraphQL or microservices without a concrete requirement;
 - no Google Cloud dependency.
@@ -35,6 +36,19 @@ QM Core is shared identity and access infrastructure for QManufacture products a
 - Django password/session machinery.
 
 The stable cross-product identifier is the OIDC `sub`, equal to the QM User UUID.
+
+### ExternalIdentity
+
+A verified mapping from a QM User to a legacy or external provider identity:
+
+- UUID;
+- QM User;
+- provider;
+- provider subject;
+- optional metadata;
+- unique provider + subject.
+
+This table is the future linking boundary for systems such as Google, Microsoft or legacy WordPress identities. A row is created only after a verified linking flow. Matching email addresses alone never create a link.
 
 ### Organization
 
@@ -111,6 +125,7 @@ A middleware drops existing central sessions when the QM account becomes inactiv
 QM Core owns:
 
 - identity;
+- verified external identity links;
 - organizations;
 - memberships;
 - coarse roles;
@@ -140,7 +155,7 @@ A recipient or customer can authenticate through QM Identity and be authorized b
 
 Never link identities solely because email addresses match.
 
-If a legacy or external account is linked, the linking flow must prove control of both identities or otherwise provide equivalent verified evidence.
+If a legacy or external account is linked, the linking flow must prove control of both identities or otherwise provide equivalent verified evidence. Only then is an `ExternalIdentity` record created.
 
 ## Security requirements
 
@@ -153,6 +168,23 @@ If a legacy or external account is linked, the linking flow must prove control o
 - fail closed on inactive user/membership/organization/entitlement;
 - audit privilege changes;
 - no secrets in the repository.
+
+## Deployment and cutover
+
+QM Identity deploys into its own PostgreSQL database.
+
+The former mixed QManufacture staging may be used only as a migration source/rollback reference. It must not remain a second authoritative identity store after cutover.
+
+A one-time snapshot importer preserves:
+
+- UUIDs;
+- password hashes;
+- organizations;
+- mapped coarse roles;
+- product entitlements;
+- verified external identity links.
+
+The importer refuses a non-empty target database. Full procedure and rollback checks are documented in `docs/DEPLOYMENT.md`.
 
 ## External identity providers
 
@@ -185,7 +217,10 @@ Current implementation:
 - `qm.access` scope;
 - stable identity claims;
 - RP-initiated logout;
-- product integration contract.
+- verified `ExternalIdentity` model;
+- product integration contract;
+- clean deployment/cutover procedure;
+- one-time UUID/password-hash preserving legacy identity importer.
 
 ### Stage 3 — account lifecycle and hardening
 
@@ -211,7 +246,7 @@ Only when justified:
 
 - social login;
 - SAML;
-- verified external-account linking;
+- verified provider linking UI;
 - MFA.
 
 ## Canonical product integration

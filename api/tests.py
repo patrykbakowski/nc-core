@@ -15,6 +15,24 @@ Application = get_application_model()
 AccessToken = get_access_token_model()
 
 
+class OIDCProviderTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_discovery_and_jwks_are_live(self):
+        discovery = self.client.get("/o/.well-known/openid-configuration")
+        self.assertEqual(discovery.status_code, 200)
+        payload = discovery.json()
+        self.assertEqual(payload["issuer"], "https://identity.test/o")
+        self.assertIn("authorization_endpoint", payload)
+        self.assertIn("token_endpoint", payload)
+        self.assertIn("jwks_uri", payload)
+
+        jwks = self.client.get("/o/.well-known/jwks.json")
+        self.assertEqual(jwks.status_code, 200)
+        self.assertTrue(jwks.json()["keys"])
+
+
 class AccessContextTests(TestCase):
     def setUp(self):
         self.client = APIClient()

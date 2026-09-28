@@ -95,10 +95,26 @@ LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/api/v1/auth/me/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 
+
+def _env_bool(name, default=False):
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+SESSION_COOKIE_NAME = "qm_identity_session"
+CSRF_COOKIE_NAME = "qm_identity_csrf"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SECURE = _env_bool("QM_SECURE_COOKIES", False)
+CSRF_COOKIE_SECURE = _env_bool("QM_SECURE_COOKIES", False)
+SECURE_SSL_REDIRECT = _env_bool("QM_SECURE_SSL_REDIRECT", False)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
 
 
 def _multiline_env(name):

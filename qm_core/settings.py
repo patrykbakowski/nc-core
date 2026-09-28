@@ -15,6 +15,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "oauth2_provider",
     "rest_framework",
     "users",
     "organizations",
@@ -28,6 +29,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "users.middleware.ActiveQMAccountMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -37,7 +39,7 @@ ROOT_URLCONF = "qm_core.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -79,6 +81,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 AUTH_USER_MODEL = "users.User"
+AUTHENTICATION_BACKENDS = ["users.auth.QMModelBackend"]
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
@@ -88,13 +91,47 @@ USE_TZ = True
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+LOGIN_URL = "/accounts/login/"
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/accounts/login/"
+
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 SECURE_CONTENT_TYPE_NOSNIFF = True
 
+
+def _multiline_env(name):
+    value = os.getenv(name, "")
+    return value.replace("\\n", "\n").strip()
+
+
+OIDC_RSA_PRIVATE_KEY = _multiline_env("QM_OIDC_RSA_PRIVATE_KEY")
+OIDC_ISSUER = os.getenv("QM_OIDC_ISSUER", "").rstrip("/")
+
+OAUTH2_PROVIDER = {
+    "OIDC_ENABLED": bool(OIDC_RSA_PRIVATE_KEY),
+    "OIDC_RSA_PRIVATE_KEY": OIDC_RSA_PRIVATE_KEY,
+    "OIDC_ISS_ENDPOINT": OIDC_ISSUER,
+    "OAUTH2_VALIDATOR_CLASS": "users.oauth_validators.QMOAuth2Validator",
+    "SCOPES": {
+        "openid": "OpenID Connect identity",
+        "profile": "Basic user profile",
+        "email": "User email address",
+        "qm.access": "Read current QM organization and product access context",
+    },
+    "DEFAULT_SCOPES": ["openid", "profile", "email"],
+    "PKCE_REQUIRED": True,
+    "COMPLIANT_BCP_RFC9700_PKCE_METHOD": True,
+    "COMPLIANT_BCP_RFC9700_ACCESS_TOKEN_TRANSPORT": True,
+    "COMPLIANT_BCP_RFC9700_AUTHZ_RESPONSE_ISS": True,
+    "COMPLIANT_BCP_RFC9700_REDIRECT_URI_MATCHING": True,
+    "COMPLIANT_BCP_RFC9700_PKCE_REQUIRED": True,
+}
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "oauth2_provider.contrib.rest_framework.OAuth2Authentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [

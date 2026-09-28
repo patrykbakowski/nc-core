@@ -94,6 +94,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/api/v1/auth/me/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
+PASSWORD_RESET_TIMEOUT = int(os.getenv("PASSWORD_RESET_TIMEOUT", "86400"))
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "QM Identity <noreply@qmanufacture.com>")
+QM_ACCOUNT_PUBLIC_ORIGIN = os.getenv("QM_ACCOUNT_PUBLIC_ORIGIN", "http://localhost:8000").rstrip("/")
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+EMAIL_FILE_PATH = os.getenv("EMAIL_FILE_PATH", str(BASE_DIR / "mail"))
 
 
 def _env_bool(name, default=False):
@@ -143,6 +148,7 @@ OAUTH2_PROVIDER = {
         "profile": "Basic user profile",
         "email": "User email address",
         "qm.access": "Read current QM organization and product access context",
+        "qm.provision": "Create or resend central QM account invitations",
     },
     "DEFAULT_SCOPES": ["openid", "profile", "email"],
     "PKCE_REQUIRED": True,

@@ -2,7 +2,10 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
+from api.views import HealthView
+
 urlpatterns = [
+    path("healthz/", HealthView.as_view(), name="healthz"),
     path("admin/", admin.site.urls),
     path(
         "accounts/login/",

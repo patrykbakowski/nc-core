@@ -11,5 +11,9 @@ class AccessContextQuerySerializer(serializers.Serializer):
     product = serializers.SlugField(max_length=64)
 
 
+class ServiceAccessContextQuerySerializer(AccessContextQuerySerializer):
+    user_id = serializers.UUIDField()
+
+
 class InvitationSerializer(serializers.Serializer):
     email = serializers.EmailField()

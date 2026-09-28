@@ -23,7 +23,7 @@ class IdentityModelTests(TestCase):
         )
         self.assertIsInstance(user.pk, uuid.UUID)
         self.assertEqual(user.email, "person@example.com")
-        self.assertFalse(hasattr(user, "username"))
+        self.assertNotIn("username", {field.name for field in user._meta.get_fields()})
 
     def test_external_identity_subject_is_unique_per_provider(self):
         first = User.objects.create_user(email="first@example.com", password="password 12345")

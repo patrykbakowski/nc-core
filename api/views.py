@@ -1,4 +1,5 @@
 from django.contrib.auth import authenticate, get_user_model, login, logout
+from django.db import connection
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
@@ -21,6 +22,20 @@ def user_payload(user):
         "first_name": user.first_name,
         "last_name": user.last_name,
     }
+
+
+class HealthView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+        except Exception:
+            return Response({"status": "error"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response({"status": "ok"})
 
 
 class LoginView(APIView):

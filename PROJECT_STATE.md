@@ -1,62 +1,80 @@
 # QM Core / QM Identity — Project State
 
-**Updated:** 2026-09-25  
+**Updated:** 2026-09-28  
 **Repository:** `patrykbakowski/nc-core` (legacy repository name)  
-**Status:** ACTIVE / Stage 1 merged to main; Zgodomat integration next
+**Status:** ACTIVE / cross-domain Identity foundation in implementation
 
 ## Purpose
 
-Provide shared identity/access capabilities owned by QManufacture and usable by independent products plus Neuroconnect NC Platform.
+Provide shared identity/access capabilities owned by QManufacture and usable by independent products without moving their business domains into the core.
 
 ## Naming decision
 
 - **QManufacture** owns the shared technical foundation.
 - **QM Core** is that shared foundation.
 - **QM Identity** is the identity/authentication module inside QM Core.
-- **NC Platform** means only the Neuroconnect training application.
-- **NC Core** and **NC ID** are deprecated names. The repository name `nc-core` remains unchanged for continuity.
+- **NC Core** and **NC ID** are deprecated names. The repository name remains unchanged for continuity.
 
-## First real consumer
+## Implemented on main before this slice
 
-**Zgodomat** is the first real consumer. The minimal contract is documented in `docs/API.md`.
-
-The merged Stage 1 slice intentionally exposes only:
-- email/password session authentication;
-- current user and active organization memberships;
-- coarse organization role;
-- product entitlement lookup for a requested organization/product.
-
-Zgodomat still owns documents, versions, requests, acceptance evidence, product audit trail and fine-grained authorization.
-
-## Implemented in Stage 1
-
-- Django project package `qm_core`;
-- custom Django User from the first migration, with UUID primary key and email as `USERNAME_FIELD`;
-- Organization and Membership with fail-closed coarse roles;
+- Django + PostgreSQL project;
+- custom User with UUID primary key and email as `USERNAME_FIELD`;
+- Organization and Membership;
+- coarse roles `org:owner`, `org:admin`, `org:member`, `org:viewer`;
 - ProductEntitlement with status and validity window;
-- `POST /api/v1/auth/login/`;
-- `POST /api/v1/auth/logout/`;
-- `GET /api/v1/auth/me/`;
-- `GET /api/v1/access-context/`;
-- tenant-isolation and entitlement tests;
-- PostgreSQL GitHub Actions CI;
-- no Google Cloud, social login, billing or product-domain models.
+- email/password session login/logout/me;
+- generic `GET /api/v1/access-context/`;
+- fail-closed tenant and entitlement tests;
+- PostgreSQL CI;
+- no Google Cloud and no social-login dependency.
 
-## Boundaries preserved
+## Current Identity slice
 
-- Fine-grained product authorization stays in each product.
-- Product-specific audit trails stay in each product.
-- Course, CourseSession, Enrollment and Material remain outside QM Core.
-- Account linking must use a verified flow, never email-match-only.
-- Cross-domain SSO/service auth is deferred. The current Django session contract is a first staging slice, not the final multi-domain identity design.
+The previous session-only contract is insufficient for independent products on different registrable domains. The active implementation therefore adds the cross-domain foundation now rather than postponing it.
 
-## Current delivery state
+Current branch: `feature/qm-identity-oidc-foundation`.
 
-Stage 1 was merged to `main` on 2026-09-25 in squash commit `c30a9a1d01f2df5ebff9716bc6191f6c3c296dd5` after PostgreSQL CI passed. Live Zgodomat staging then exposed an identity-model mismatch (legacy pilot already uses UUID/email-native users), so follow-up alignment is being applied before the first QM Core deployment.
+Included:
 
-## Next steps
+- Django OAuth Toolkit as the standards-based OAuth2/OIDC provider;
+- OIDC Authorization Code + PKCE;
+- RSA-signed ID tokens when `QM_OIDC_RSA_PRIVATE_KEY` is configured;
+- central browser login at `/accounts/login/`;
+- OIDC discovery/JWKS/UserInfo through the provider routes under `/o/`;
+- OAuth2 bearer authentication for the existing REST API;
+- scope `qm.access` for runtime organization/product access checks;
+- stable identity claims only in OIDC; roles/entitlements remain runtime data;
+- central account-status enforcement for both new authentication and existing sessions;
+- RP-initiated logout support;
+- product integration contract in `docs/IDENTITY_INTEGRATION.md`.
 
-1. Integrate the existing Zgodomat pilot against the minimal access-context contract without moving Zgodomat domain data into QM Core.
-2. Add the smallest missing account lifecycle pieces required by that integration, likely password reset/invitation before public pilot use.
-3. Add service authentication/OIDC only when separate product deployment makes it necessary.
-4. Keep VerifyTest and Booking queued until their real use cases justify implementation.
+## Boundary that remains unchanged
+
+QM Identity answers:
+
+- who is the user?
+- which organizations is the user an active member of?
+- what coarse organization role do they have?
+- does the organization currently have an entitlement to product X?
+
+Each product still answers its own domain questions, for example whether a particular document may be edited, a test may be scored or an appointment may be changed.
+
+## Deployment requirements for OIDC
+
+Production OIDC requires:
+
+- `QM_OIDC_RSA_PRIVATE_KEY` supplied as a secret, never committed;
+- `QM_OIDC_ISSUER=https://account.qmanufacture.com/o` (planned production issuer);
+- HTTPS;
+- exact registered redirect URIs for every client;
+- a registered OAuth/OIDC Application per product deployment.
+
+No external social provider is required.
+
+## Next after this slice
+
+1. pass repository CI and merge the OIDC foundation;
+2. deploy QM Identity to staging with a generated RSA key;
+3. register the first real OIDC client (Zgodomat) and perform end-to-end browser login;
+4. add the smallest account-lifecycle features required by the pilot: password reset and invitations;
+5. then integrate VerifiTest and Booking against the same contract, without creating new identity stores.

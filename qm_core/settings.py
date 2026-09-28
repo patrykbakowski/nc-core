@@ -122,7 +122,14 @@ def _multiline_env(name):
     return value.replace("\\n", "\n").strip()
 
 
-OIDC_RSA_PRIVATE_KEY = _multiline_env("QM_OIDC_RSA_PRIVATE_KEY")
+def _oidc_private_key():
+    key_file = os.getenv("QM_OIDC_RSA_PRIVATE_KEY_FILE", "").strip()
+    if key_file:
+        return Path(key_file).read_text(encoding="utf-8").strip()
+    return _multiline_env("QM_OIDC_RSA_PRIVATE_KEY")
+
+
+OIDC_RSA_PRIVATE_KEY = _oidc_private_key()
 OIDC_ISSUER = os.getenv("QM_OIDC_ISSUER", "").rstrip("/")
 
 OAUTH2_PROVIDER = {

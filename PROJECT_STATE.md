@@ -2,7 +2,7 @@
 
 **Updated:** 2026-09-28  
 **Repository:** `patrykbakowski/nc-core` (legacy repository name)  
-**Status:** ACTIVE / cross-domain Identity foundation ready for clean staging after CI
+**Status:** ACTIVE / cross-domain Identity deployed to staging; central account lifecycle in implementation
 
 ## Purpose
 
@@ -111,3 +111,21 @@ See:
 - `docs/API.md`;
 - `docs/IDENTITY_INTEGRATION.md`;
 - `docs/DEPLOYMENT.md`.
+
+
+## Account lifecycle follow-up — 2026-09-28
+
+The first product integration exposed one remaining identity-boundary problem: products such as Zgodomat must be able to invite a recipient without creating a second password store.
+
+The current lifecycle branch adds:
+
+- central password reset UI;
+- central invitation activation UI;
+- purpose-scoped invitation tokens;
+- OAuth scope `qm.provision`;
+- Client-Credentials-only `POST /api/v1/accounts/invitations/`;
+- account creation/invitation without membership, role or entitlement grants;
+- hard refusal to reactivate suspended/deleted accounts;
+- invitation resend invalidates the previous link by rotating the unusable password hash.
+
+Product integration rule: products may keep local profile/domain rows keyed by QM UUID, but passwords and activation live only in QM Identity.

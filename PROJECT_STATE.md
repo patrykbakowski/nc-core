@@ -2,7 +2,7 @@
 
 **Updated:** 2026-09-28  
 **Repository:** `patrykbakowski/nc-core` (legacy repository name)  
-**Status:** ACTIVE / cross-domain Identity deployed to staging; central account lifecycle in implementation
+**Status:** ACTIVE / cross-domain Identity + account lifecycle deployed to staging; service authorization in implementation
 
 ## Purpose
 
@@ -129,3 +129,19 @@ The current lifecycle branch adds:
 - invitation resend invalidates the previous link by rotating the unusable password hash.
 
 Product integration rule: products may keep local profile/domain rows keyed by QM UUID, but passwords and activation live only in QM Identity.
+
+
+## Service authorization follow-up — 2026-09-28
+
+Zgodomat exposed a second backend requirement: a product may need to verify that a known QM user still has current organization/product access when that user is not the caller, for example when validating whether the issuer of a pending acceptance request still has authority.
+
+The current branch adds:
+
+- `GET /api/v1/service/access-context/`;
+- Client Credentials authentication;
+- mandatory `qm.access` scope;
+- lookup by immutable QM `user_id`;
+- the same active user/membership/organization/entitlement checks as browser/user access-context;
+- no impersonation and no user session issuance.
+
+This becomes the canonical backend authorization check for product jobs and server-side workflows.

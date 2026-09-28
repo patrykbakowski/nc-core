@@ -1,15 +1,18 @@
 from datetime import timedelta
 import uuid
 
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model
 from django.test import TestCase
 from django.utils import timezone
+from oauth2_provider.models import get_access_token_model, get_application_model
 from rest_framework.test import APIClient
 
 from entitlements.models import ProductEntitlement
 from organizations.models import Membership, Organization
 
 User = get_user_model()
+Application = get_application_model()
+AccessToken = get_access_token_model()
 
 
 class AccessContextTests(TestCase):
@@ -48,6 +51,24 @@ class AccessContextTests(TestCase):
             format="json",
         )
 
+    def bearer(self, scope="openid profile email qm.access"):
+        application = Application.objects.create(
+            user=self.user,
+            name="QM test client",
+            client_type="confidential",
+            authorization_grant_type="authorization-code",
+            redirect_uris="https://client.example/callback",
+        )
+        token = AccessToken.objects.create(
+            user=self.user,
+            application=application,
+            token=f"test-token-{uuid.uuid4()}",
+            expires=timezone.now() + timedelta(minutes=10),
+            scope=scope,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        return token
+
     def test_email_login_and_me(self):
         self.assertIsInstance(self.user.pk, uuid.UUID)
         response = self.client.post(
@@ -81,6 +102,28 @@ class AccessContextTests(TestCase):
         self.assertEqual(response.data["membership"]["role"], Membership.Role.ADMIN)
         self.assertEqual(response.data["entitlement"]["product"], "zgodomat")
         self.assertEqual(response.data["entitlement"]["plan"], "pilot")
+
+    def test_oauth_bearer_can_read_me_and_access_context(self):
+        self.bearer()
+
+        response = self.client.get("/api/v1/auth/me/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["user"]["id"], str(self.user.pk))
+
+        response = self.client.get(
+            "/api/v1/access-context/",
+            {"organization_id": str(self.org.pk), "product": "zgodomat"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["entitlement"]["product"], "zgodomat")
+
+    def test_oauth_bearer_without_qm_access_scope_is_denied_context(self):
+        self.bearer(scope="openid profile email")
+        response = self.client.get(
+            "/api/v1/access-context/",
+            {"organization_id": str(self.org.pk), "product": "zgodomat"},
+        )
+        self.assertEqual(response.status_code, 403)
 
     def test_cross_tenant_context_is_hidden(self):
         self.login()
@@ -116,6 +159,15 @@ class AccessContextTests(TestCase):
 
         response = self.client.get("/api/v1/auth/me/")
         self.assertEqual(response.status_code, 403)
+
+    def test_suspended_user_cannot_reauthenticate(self):
+        self.user.status = User.Status.SUSPENDED
+        self.user.save(update_fields=["status"])
+        authenticated = authenticate(
+            email=self.user.email,
+            password="correct horse battery staple",
+        )
+        self.assertIsNone(authenticated)
 
     def test_suspended_membership_is_hidden(self):
         self.membership.status = Membership.Status.SUSPENDED

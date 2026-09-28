@@ -104,6 +104,25 @@ The request fails closed when:
 
 Cross-tenant membership failures return 404. Missing/inactive entitlement returns 403.
 
+## Service access context
+
+### GET /api/v1/service/access-context/?user_id=<uuid>&organization_id=<uuid>&product=<product-id>
+
+This endpoint is for trusted product backends and background jobs that need a current authorization decision for a known QM user UUID when that user is not the caller.
+
+It requires a Client Credentials OAuth token with the `qm.access` scope.
+
+It applies the same authoritative checks as the user-facing access-context:
+
+- QM user must be active;
+- membership must be active;
+- organization must be active;
+- entitlement for the requested product must be current.
+
+It returns the same user/organization/membership/entitlement payload. Cross-tenant or inactive user/membership relationships fail closed with 404; missing/inactive entitlement returns 403.
+
+This is **not impersonation**. The service receives only access context and does not receive a user session or user token.
+
 ## Authorization boundary
 
 QM Core owns identity, organization, membership/coarse role and product entitlement.

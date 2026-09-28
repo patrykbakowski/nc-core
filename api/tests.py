@@ -152,13 +152,13 @@ class AccessContextTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
 
-    def test_suspended_user_session_is_denied(self):
+    def test_suspended_user_session_becomes_unauthenticated(self):
         self.login()
         self.user.status = User.Status.SUSPENDED
         self.user.save(update_fields=["status"])
 
         response = self.client.get("/api/v1/auth/me/")
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 401)
 
     def test_suspended_user_cannot_reauthenticate(self):
         self.user.status = User.Status.SUSPENDED

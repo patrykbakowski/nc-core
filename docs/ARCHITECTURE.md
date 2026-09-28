@@ -6,226 +6,216 @@ QManufacture owns the shared technical foundation.
 
 - **QM Core** — shared identity/access foundation.
 - **QM Identity** — identity/authentication module inside QM Core.
-- **NC Platform** — separate Neuroconnect training application and a consumer of QM Core.
 - **NC Core** and **NC ID** — deprecated architecture names. The repository remains named `patrykbakowski/nc-core` for continuity only.
 
 ## Purpose
 
-QM Core is the shared identity and access infrastructure for QManufacture products and external clients such as Neuroconnect NC Platform. It owns users, organizations, memberships, coarse roles/permissions, product entitlements, API authentication and audit identity correlation.
+QM Core is shared identity and access infrastructure for QManufacture products and optional external clients. It owns users, organizations, memberships, coarse roles, product entitlements, authentication and audit identity correlation.
 
-**QM Core is infrastructure, not a product backend.** It does NOT own product business logic or data.
+**QM Core is infrastructure, not a product backend.** It does not own product business logic or product-domain data.
 
-## Implementation Stack
+## Implementation stack
 
-**Django + PostgreSQL.**
+- Django + PostgreSQL;
+- REST;
+- Django sessions for central/same-origin use;
+- Django OAuth Toolkit for standards-based OAuth2/OIDC;
+- one deployable modular application;
+- no GraphQL or microservices without a concrete requirement;
+- no Google Cloud dependency.
 
-KISS favors a small, reusable identity/access foundation. REST API. No GraphQL in MVP. No microservices.
-
-## Domain Model
+## Domain model
 
 ### User
-- Identity: email (unique), name, phone (optional)
-- Account status: active, suspended, deleted
-- **Custom Django User model from first migration** (use `AbstractBaseUser` or `AbstractUser`)
-- Django authentication machinery (password hashing, sessions, permissions)
+
+- UUID primary key;
+- unique normalized email as native Django `USERNAME_FIELD`;
+- first/last name and optional profile fields;
+- account state: active, suspended, deleted;
+- Django password/session machinery.
+
+The stable cross-product identifier is the OIDC `sub`, equal to the QM User UUID.
 
 ### Organization
-- Name, display name, organization type
-- Tenant isolation boundary
-- Status: active, suspended, deleted
+
+- UUID;
+- name and slug;
+- active/suspended/deleted state;
+- tenant isolation boundary.
 
 ### Membership
-- User belongs to Organization with Role
-- Status: active, invited, suspended
-- Invitation metadata
 
-### Role & Permission
-**Coarse roles owned by QM Core:**
-- `org:owner` — full control, transfer ownership
-- `org:admin` — manage organization, members, entitlements
-- `org:member` — access organization resources
-- `org:viewer` — read-only access
+A user belongs to an organization with one coarse role:
 
-**Fine-grained authorization stays in products.** Products define and enforce their own rules (e.g., "may edit consent document X") using QM Identity context. Products MAY pass opaque scopes (e.g., `zgodomat:editor`) to QM Core for storage, but QM Core does not interpret them.
+- `org:owner`;
+- `org:admin`;
+- `org:member`;
+- `org:viewer`.
 
-### Product Entitlement
-- OrganizationId + ProductId (`zgodomat`, `verifytest`, `booking`, `neuroconnect-training`)
-- Plan/tier, valid from/until, status
-- Products query entitlements before granting access
+Membership has its own lifecycle and fails closed unless active.
 
-### API Authentication
-Django sessions initially. API keys for service-to-service added later. OAuth/OIDC providers prepared for SSO but not implemented in MVP.
+### Product entitlement
 
-**Do not implement crypto/token/OAuth protocols from scratch.** Use Django auth and standards-compliant libraries when SSO is added.
+An organization may have a current entitlement to a product slug such as `zgodomat`, `verifitest` or `booking`.
 
-### Audit Identity
-QM Core logs identity/access changes: user created, member invited, role assigned, entitlement granted. Provides actor/tenant correlation (who, which org, when).
+Entitlement contains status, plan and optional validity interval.
 
-**Product-specific audit trails stay in products** (e.g., "consent document viewed"). QM Core is not a dumping ground for all product events.
+An entitlement answers whether the organization can use the product. It does not replace product-level fine authorization.
 
-## Data Ownership Boundaries
+## Authentication architecture
 
-| Concern                              | Owner         |
-|--------------------------------------|---------------|
-| User identity, credentials           | **QM Core / QM Identity** |
-| Organizations, memberships, roles    | **QM Core**   |
-| Product entitlements                 | **QM Core**   |
-| Authentication, sessions, API keys   | **QM Identity** |
-| Audit: identity/access actions       | **QM Core**   |
-| Consent documents, acceptance logs   | Zgodomat      |
-| Tests, sessions, answers, scoring    | VerifyTest    |
-| Appointments, availability           | Booking       |
-| Invoices, payments                   | Billing       |
-| Training courses, enrollments        | Neuroconnect NC Platform |
+### Central Identity Provider
 
-**Explicit boundary:** Neuroconnect training domain (Course, CourseSession, Enrollment, Material) is NOT QM Core.
+QM Identity is the OpenID Provider / Authorization Server for QManufacture products.
 
-## Consumers
+Separate product domains use:
 
-QM Core is consumed by:
+- OIDC Authorization Code;
+- PKCE S256;
+- exact HTTPS redirect URIs;
+- discovery/JWKS;
+- product-local sessions after callback.
 
-- Zgodomat,
-- VerifyTest,
-- Booking,
-- Neuroconnect NC Platform,
-- future QManufacture products with a genuine shared identity/access requirement.
+Shared cross-domain cookies are explicitly not the architecture.
 
-Each consumer remains independently deployable/sellable at product level and keeps its domain data outside QM Core.
+### Stable claims
 
-## Integration Contract
+OIDC tokens expose stable identity claims such as:
 
-The first real consumer is **Zgodomat**. The executable v1 contract is intentionally smaller than the eventual platform API and is documented in `docs/API.md`:
+- `sub`;
+- email;
+- name/given/family name when requested by standard scopes.
 
-1. **Authentication** — `POST /api/v1/auth/login/`, `GET /api/v1/auth/me/`, `POST /api/v1/auth/logout/`.
-2. **Access context** — `GET /api/v1/access-context/?organization_id=<uuid>&product=zgodomat`.
+Current organization roles and product entitlements are not copied into long-lived ID tokens. Products query current access when they need an authorization decision.
 
-The access-context response contains only identity, active organization membership, coarse role and active product entitlement. Zgodomat applies its own document/request/evidence authorization.
+### Runtime access context
 
-Django sessions are the first staging mechanism. They are not the final cross-domain SSO design. Separate product domains will later require standards-based OIDC/service authentication rather than shared cookies.
+`GET /api/v1/access-context/` returns the current active user, organization membership/coarse role and active entitlement for a requested product.
 
-QM Core does NOT own or orchestrate product business workflows.
+OAuth calls require scope `qm.access`.
 
-## Tenant Boundaries
+This makes suspension and entitlement revocation authoritative at runtime instead of waiting for an ID token to expire.
 
-**OrganizationId enforces tenant isolation.**
+### Central sessions
 
-- Django middleware loads tenant context from authenticated user
-- Views/APIs enforce organization membership before data access
-- Test suite includes multi-tenant isolation tests
-- Service accounts may span orgs (admin operations only)
+Django sessions remain valid for:
 
-**Avoid simplistic claims.** Not every query in every product literally filters `OrganizationId`. The principle: enforce tenant context consistently, test isolation, prevent cross-tenant leakage.
+- central login UI;
+- Django admin;
+- same-origin testing.
 
-## Authentication Phases
+A middleware drops existing central sessions when the QM account becomes inactive.
 
-**MVP (Phase 1):**
-- Custom Django User model, password hashing (PBKDF2 default)
-- Django sessions (HTTP-only cookies)
-- Email/password login, logout
-- Password reset via email
+## Authorization boundary
 
-**Phase 2:**
-- API keys (Django REST Framework tokens or custom)
-- Multi-factor authentication (django-otp)
+QM Core owns:
 
-**Phase 3:**
-- External IdP via OAuth/OIDC
-- SAML for enterprise SSO
-- **Account linking requires verified linking flow** — never link solely because emails match
+- identity;
+- organizations;
+- memberships;
+- coarse roles;
+- product entitlements;
+- shared authentication;
+- identity/access audit correlation.
 
-**Prepared but not now:** Social login (Google, Microsoft). No Google Cloud dependency.
+Products own:
 
-## Django Application Structure
+- product entities and workflows;
+- product-specific authorization;
+- product-specific audit evidence.
 
-One deployable modular Django project:
+Examples:
 
-```
-qm_core/
-├── manage.py
-├── qm_core/
-│   ├── settings/
-│   ├── urls.py
-│   └── wsgi.py
-├── users/               # QM Identity
-│   ├── models.py
-│   ├── views.py
-│   ├── serializers.py
-│   └── tests.py
-├── organizations/
-│   ├── models.py
-│   ├── views.py
-│   └── tests.py
-├── entitlements/
-│   ├── models.py
-│   └── views.py
-├── audit/
-│   ├── models.py
-│   └── views.py
-├── api/
-│   ├── v1/
-│   ├── middleware.py
-│   └── permissions.py
-└── tests/
-```
+- Zgodomat owns documents, versions, requests and acceptance evidence;
+- VerifiTest owns tests, sessions, answers and scoring;
+- Booking owns appointments and availability.
 
-Standard Django conventions. Django REST Framework for API. PostgreSQL database.
+## User without organization entitlement
 
-## MVP Sequence
+Not every authenticated user must belong to an entitled organization.
 
-### Stage 1: Minimal Identity & Roles
-- Custom User model (from first migration)
-- Organization, Membership, Role models
-- Coarse roles: `org:owner`, `org:admin`, `org:member` (fail closed if no role)
-- Django auth: login, logout, session management
-- REST API: `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`
-- Tenant context middleware enforces organization membership
-- Permission checks in API views
-- Member invitation API
-- One real consumer can authenticate users
-- Minimal ProductEntitlement is included because Zgodomat needs an explicit product-access check from the first real contract
-- **Defer:** MFA, service auth, opaque product-scoped roles
+A recipient or customer can authenticate through QM Identity and be authorized by a product-domain relationship. Products should not manufacture placeholder organizations for such users.
 
-### Stage 2: Entitlements
-- Entitlement model (orgId, productId, plan, valid dates)
-- REST API: `GET /orgs/{orgId}/entitlements`, `POST /admin/entitlements`
-- Products query before granting access
-- **Defer:** Billing integration, feature flags
+## Account linking
 
-### Stage 3: Audit & Hardening
-- AuditRecord model (actor, org, action, subject, timestamp)
-- Audit log API (internal, products may write correlation events)
-- Rate limiting
-- Account lockout after failed logins
-- **Defer:** MFA
+Never link identities solely because email addresses match.
 
-### Stage 4: API Keys & Service Auth
-- API key model/tokens for service-to-service
-- Django REST Framework TokenAuthentication or custom
-- **Defer:** OAuth/OIDC
+If a legacy or external account is linked, the linking flow must prove control of both identities or otherwise provide equivalent verified evidence.
 
-### Stage 5: External IdP & SSO
-- OAuth/OIDC client
-- SAML for enterprise
-- Verified account linking flow
-- **Defer:** Advanced MFA options
+## Security requirements
 
-## Security Notes
+- production HTTPS;
+- OIDC RSA private key stored only as a deployment secret;
+- exact production redirect URIs;
+- PKCE S256;
+- no hand-written OAuth/JWT crypto;
+- tenant isolation tests;
+- fail closed on inactive user/membership/organization/entitlement;
+- audit privilege changes;
+- no secrets in the repository.
 
-- Use Django's built-in password hashing
-- HTTPS required for production
-- Django's CSRF protection enabled
-- Secrets in environment variables, never committed
-- Rotate database credentials and SECRET_KEY according to operational policy
-- Multi-tenant isolation tests in CI
-- Audit all privilege escalation (role grants, entitlement changes)
+## External identity providers
 
-## Next Steps
+Google/Facebook/Microsoft login is a separate future capability.
 
-Stage 1 is merged to `main`. The next executable step is integration rather than more generic identity abstraction:
+QM Identity becoming an OIDC provider for our products does **not** require Google Cloud and does not enable social login.
 
-1. Integrate the existing Zgodomat pilot against `docs/API.md`.
-2. Add only account-lifecycle capabilities proven necessary by that pilot.
-3. Introduce service authentication/OIDC when independent product deployment requires cross-domain identity.
-4. Deploy QM Core to staging after the Zgodomat integration path is verified.
+## Delivery sequence
 
-Keep it practical. Build for real product needs, not generic IAM abstractions.
+### Stage 1 — identity/access data model
+
+Implemented:
+
+- UUID email-native User;
+- Organization/Membership;
+- coarse roles;
+- ProductEntitlement;
+- session login;
+- `me` and runtime access-context;
+- tenant isolation tests.
+
+### Stage 2 — cross-domain Identity
+
+Current implementation:
+
+- OAuth2/OIDC provider;
+- Authorization Code + PKCE;
+- central browser login;
+- bearer authentication on REST endpoints;
+- `qm.access` scope;
+- stable identity claims;
+- RP-initiated logout;
+- product integration contract.
+
+### Stage 3 — account lifecycle and hardening
+
+Next:
+
+- password reset;
+- invitations;
+- identity/access audit records;
+- login throttling/lockout;
+- operational key rotation procedure.
+
+### Stage 4 — service provisioning
+
+Add when a concrete product flow needs it:
+
+- service-to-service credentials;
+- scoped provisioning APIs;
+- entitlement changes from commerce/billing events.
+
+### Stage 5 — external IdP / enterprise auth
+
+Only when justified:
+
+- social login;
+- SAML;
+- verified external-account linking;
+- MFA.
+
+## Canonical product integration
+
+See `docs/IDENTITY_INTEGRATION.md`.
+
+New products must integrate against that contract rather than create another password store or private interpretation of roles.

@@ -6,69 +6,73 @@ Shared identity and access foundation owned by the QManufacture product family.
 
 ## Goal
 
-Provide a small stable identity/access core for independent QManufacture products and external clients such as Neuroconnect, without becoming a catch-all business backend.
+Provide one stable identity/access core for independent QManufacture products and external clients without becoming a catch-all business backend.
 
 ## Stack
 
 - Django
 - PostgreSQL
 - REST
+- standards-based OAuth 2.0 / OpenID Connect provider
 - one deployable modular application
 - no microservices for MVP
 - no Google Cloud dependency
 
-Use Django's mature authentication/session machinery. Do not implement password hashing, token crypto or OAuth/OIDC protocols from scratch.
+Use Django's mature authentication/session machinery and Django OAuth Toolkit. Do not implement password hashing, token crypto or OAuth/OIDC protocols from scratch.
 
 ## Owned by QM Core / QM Identity
 
 - custom Django User from the first migration,
 - organizations,
 - memberships,
-- coarse roles/permissions,
+- coarse organization roles,
 - product entitlements,
-- authentication / later service auth,
+- authentication and OIDC,
+- later service authentication,
 - audit identity/correlation.
 
 ## Consumers
 
+Primary QManufacture consumers:
+
 - Zgodomat,
-- VerifyTest,
+- VerifiTest,
 - Booking,
-- Neuroconnect **NC Platform** (training application).
+- future QManufacture products.
+
+External clients such as Neuroconnect may use the same identity contract without moving their business data into QM Core.
 
 ## Owned by products / clients
 
 - consent/document acceptance -> Zgodomat,
-- tests/sessions/answers/scoring -> VerifyTest,
+- tests/sessions/answers/scoring -> VerifiTest,
 - appointments/availability -> Booking,
 - invoices/payments -> billing,
-- Course/CourseSession/Enrollment/Material and BUR training workflow -> Neuroconnect / NC Platform.
+- training courses/enrollments/materials -> external training platforms.
 
 Fine-grained product authorization and product-specific audit trails stay in the product.
 
-## Architecture
+## Authentication contract
 
-The reviewed architecture is in `docs/ARCHITECTURE.md`.
+For separate product domains, the canonical flow is:
 
-Independent products can work alone while using QM Core/QM Identity for shared identity and access. Social login/SSO is prepared for later but not implemented now.
+1. product redirects the browser to QM Identity,
+2. QM Identity authenticates the user,
+3. product uses **OIDC Authorization Code + PKCE (S256)**,
+4. product identifies the user by OIDC `sub` (the QM UUID), never by email matching,
+5. product creates its own local session,
+6. product may query QM Identity with the bearer token for current user/membership information,
+7. organization/product access is checked at runtime via `/api/v1/access-context/` with scope `qm.access`.
 
-See `PROJECT_STATE.md` for current status.
+Roles and entitlements deliberately stay out of long-lived ID-token claims so revoked access can take effect through the authoritative runtime check.
 
+Django session login remains available for the central account UI, admin and same-origin validation. It is not the cross-domain integration mechanism.
 
-## Current implementation slice
+External Google/Facebook/Microsoft login is still deferred. Adding OIDC here means **QM Identity is the provider for our products**, not that an external social provider is enabled.
 
-Zgodomat is the first real consumer. The first executable Stage 1 slice now lives in this repository and includes custom User, Organization, Membership, coarse roles, ProductEntitlement and the minimal REST contract in `docs/API.md`.
+## Documentation
 
-The current auth mechanism is Django session + email/password for staging validation. It is not the final cross-domain SSO design.
-
-### Local development
-
-Use PostgreSQL by default. For a deliberately local-only smoke test, set `QM_DATABASE_ENGINE=sqlite`.
-
-```bash
-python -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py test
-```
+- architecture: `docs/ARCHITECTURE.md`
+- API: `docs/API.md`
+- product integration recipe: `docs/IDENTITY_INTEGRATION.md`
+- current state: `PROJECT_STATE.md`

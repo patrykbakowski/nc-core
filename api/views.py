@@ -1,4 +1,5 @@
 from django.contrib.auth import authenticate, get_user_model, login, logout
+from django.db import connection
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
@@ -8,6 +9,7 @@ from rest_framework.views import APIView
 
 from entitlements.models import ProductEntitlement
 from organizations.models import Membership, Organization
+from .permissions import HasQMAccessScopeOrSession, IsActiveQMUser
 from .serializers import AccessContextQuerySerializer, LoginSerializer
 
 User = get_user_model()
@@ -22,6 +24,20 @@ def user_payload(user):
     }
 
 
+class HealthView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+        except Exception:
+            return Response({"status": "error"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response({"status": "ok"})
+
+
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -32,7 +48,7 @@ class LoginView(APIView):
         password = serializer.validated_data["password"]
 
         authenticated = authenticate(request, email=email, password=password)
-        if not authenticated or not authenticated.is_active or authenticated.status != User.Status.ACTIVE:
+        if not authenticated:
             raise AuthenticationFailed("Invalid credentials.")
 
         login(request, authenticated)
@@ -77,6 +93,8 @@ class MeView(APIView):
 
 
 class AccessContextView(APIView):
+    permission_classes = [IsActiveQMUser, HasQMAccessScopeOrSession]
+
     def get(self, request):
         serializer = AccessContextQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)

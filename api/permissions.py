@@ -12,3 +12,14 @@ class IsActiveQMUser(BasePermission):
             and user.is_active
             and getattr(user, "status", None) == "active"
         )
+
+
+class HasQMAccessScopeOrSession(BasePermission):
+    """Session users may call the endpoint; OAuth tokens need the qm.access scope."""
+
+    def has_permission(self, request, view):
+        token = getattr(request, "auth", None)
+        if token is None:
+            return True
+        scopes = set((getattr(token, "scope", "") or "").split())
+        return "qm.access" in scopes

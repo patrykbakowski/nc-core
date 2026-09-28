@@ -41,7 +41,7 @@ QM_SECURE_COOKIES=1
 QM_SECURE_SSL_REDIRECT=0
 ```
 
-The RSA private key, Django secret and database credentials are secrets. Never commit or print them.
+The RSA private key, Django secret and database credentials are secrets. Prefer a root-owned key file mounted read-only into the container via `QM_OIDC_RSA_PRIVATE_KEY_FILE`; never commit or print them.
 
 `QM_SECURE_SSL_REDIRECT=0` is appropriate when HTTPS is terminated by the trusted Cloudflare/Nginx edge and the application receives the forwarded scheme. The app honors `X-Forwarded-Proto`.
 

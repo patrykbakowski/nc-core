@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 
 from entitlements.models import ProductEntitlement
 from organizations.models import Membership, Organization
+from .permissions import HasQMAccessScopeOrSession, IsActiveQMUser
 from .serializers import AccessContextQuerySerializer, LoginSerializer
 
 User = get_user_model()
@@ -32,7 +33,7 @@ class LoginView(APIView):
         password = serializer.validated_data["password"]
 
         authenticated = authenticate(request, email=email, password=password)
-        if not authenticated or not authenticated.is_active or authenticated.status != User.Status.ACTIVE:
+        if not authenticated:
             raise AuthenticationFailed("Invalid credentials.")
 
         login(request, authenticated)
@@ -77,6 +78,8 @@ class MeView(APIView):
 
 
 class AccessContextView(APIView):
+    permission_classes = [IsActiveQMUser, HasQMAccessScopeOrSession]
+
     def get(self, request):
         serializer = AccessContextQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)

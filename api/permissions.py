@@ -41,3 +41,15 @@ class HasQMProvisionScope(BasePermission):
             and getattr(token, "application_id", None)
             and "qm.provision" in _token_scopes(request)
         )
+
+
+class HasQMServiceAccessScope(BasePermission):
+    """Service OAuth token must explicitly carry qm.access."""
+
+    def has_permission(self, request, view):
+        token = getattr(request, "auth", None)
+        return bool(
+            token
+            and getattr(token, "application_id", None)
+            and "qm.access" in _token_scopes(request)
+        )

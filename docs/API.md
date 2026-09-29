@@ -19,7 +19,7 @@ Product clients request:
 openid profile email qm.access
 ```
 
-`qm.access` is required only when the client needs the QM organization/product access endpoint. Backend service clients that provision central accounts use a separate `qm.provision` scope and Client Credentials; they do not receive user identity through that token.
+`qm.access` is required only when the client needs QM organization/product context. Backend service clients that provision central accounts use a separate `qm.provision` scope and Client Credentials. Scopes are necessary but not sufficient: every OAuth/OIDC client using access APIs also needs an active `OAuthClientPolicy` with an explicit grant for the requested product.
 
 The stable user identifier is the OIDC `sub`, which is the QM User UUID. Never link accounts solely because email addresses match.
 
@@ -41,7 +41,7 @@ Ends the current Django session.
 
 ### GET /api/v1/auth/me/
 
-Returns the authenticated user and active memberships in active organizations.
+Returns the authenticated user. Central sessions receive active memberships in active organizations. OAuth clients without `qm.access` receive an empty membership list; OAuth clients with `qm.access` see only memberships in organizations currently entitled to products allowed by that client's policy.
 
 It accepts either a valid Django session or an OAuth2 bearer token.
 
@@ -75,7 +75,7 @@ Example response:
 
 Returns the minimum context a product needs before applying its own fine-grained authorization.
 
-OAuth bearer calls require scope `qm.access`.
+OAuth bearer calls require scope `qm.access` **and** an active client policy granting the requested product.
 
 Example:
 
@@ -110,7 +110,7 @@ Cross-tenant membership failures return 404. Missing/inactive entitlement return
 
 This endpoint is for trusted product backends and background jobs that need a current authorization decision for a known QM user UUID when that user is not the caller.
 
-It requires a Client Credentials OAuth token with the `qm.access` scope.
+It requires a Client Credentials OAuth token with the `qm.access` scope and an active client policy granting the requested product.
 
 It applies the same authoritative checks as the user-facing access-context:
 
@@ -137,7 +137,7 @@ Do not put current roles or product entitlements into long-lived ID-token claims
 
 ### POST /api/v1/accounts/invitations/
 
-This endpoint is for trusted product backends, not browsers. It requires an OAuth2 access token issued with the Client Credentials grant and the `qm.provision` scope.
+This endpoint is for trusted product backends, not browsers. It requires an OAuth2 access token issued with the Client Credentials grant, the `qm.provision` scope, and an active client policy with `can_provision_accounts=True`.
 
 Request:
 
@@ -165,13 +165,22 @@ QM Identity owns:
 
 Password reset deliberately sends mail only for active QM accounts and does not reveal whether an account exists.
 
+## OAuth client policy
+
+Client policy is a second authorization layer above OAuth scopes.
+
+- Zgodomat clients may be granted only `zgodomat`;
+- NC Platform clients may be granted only `neuroconnect`;
+- future VerifyTest/Booking clients use their own product slugs;
+- missing/inactive policy fails closed;
+- wrong-product requests return 403;
+- account provisioning is a separate policy bit and never grants memberships or entitlements.
+
 ## Still deferred
 
 - external social login (Google/Facebook/Microsoft),
 - SAML,
-- public self-registration,
-- invitation workflow,
-- password-reset UI,
 - MFA,
-- billing integration,
+- public self-registration,
+- automated billing integration,
 - product-specific permission catalogues.

@@ -20,6 +20,7 @@ INSTALLED_APPS = [
     "users",
     "organizations",
     "entitlements",
+    "audit",
     "api",
 ]
 
@@ -134,12 +135,26 @@ def _oidc_private_key():
     return _multiline_env("QM_OIDC_RSA_PRIVATE_KEY")
 
 
+def _oidc_inactive_private_keys():
+    files = [
+        value.strip()
+        for value in os.getenv("QM_OIDC_RSA_PRIVATE_KEYS_INACTIVE_FILES", "").split(",")
+        if value.strip()
+    ]
+    return [
+        Path(key_file).read_text(encoding="utf-8").strip()
+        for key_file in files
+    ]
+
+
 OIDC_RSA_PRIVATE_KEY = _oidc_private_key()
+OIDC_RSA_PRIVATE_KEYS_INACTIVE = _oidc_inactive_private_keys()
 OIDC_ISSUER = os.getenv("QM_OIDC_ISSUER", "").rstrip("/")
 
 OAUTH2_PROVIDER = {
     "OIDC_ENABLED": bool(OIDC_RSA_PRIVATE_KEY),
     "OIDC_RSA_PRIVATE_KEY": OIDC_RSA_PRIVATE_KEY,
+    "OIDC_RSA_PRIVATE_KEYS_INACTIVE": OIDC_RSA_PRIVATE_KEYS_INACTIVE,
     "OIDC_ISS_ENDPOINT": OIDC_ISSUER,
     "OIDC_RP_INITIATED_LOGOUT_ENABLED": True,
     "OAUTH2_VALIDATOR_CLASS": "users.oauth_validators.QMOAuth2Validator",

@@ -1,4 +1,6 @@
 from django.contrib import admin
+
+from audit.admin import IdentityAuditAdminMixin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserChangeForm, UserCreationForm
 
@@ -18,7 +20,7 @@ class QMUserChangeForm(UserChangeForm):
 
 
 @admin.register(User)
-class QMUserAdmin(UserAdmin):
+class QMUserAdmin(IdentityAuditAdminMixin, UserAdmin):
     add_form = QMUserCreationForm
     form = QMUserChangeForm
     model = User
@@ -61,7 +63,7 @@ class QMUserAdmin(UserAdmin):
 
 
 @admin.register(ExternalIdentity)
-class ExternalIdentityAdmin(admin.ModelAdmin):
+class ExternalIdentityAdmin(IdentityAuditAdminMixin, admin.ModelAdmin):
     list_display = ("provider", "external_subject", "user", "created_at")
     list_filter = ("provider",)
     search_fields = ("external_subject", "user__email")

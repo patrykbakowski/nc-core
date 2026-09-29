@@ -7,6 +7,7 @@ from django.utils import timezone
 from oauth2_provider.models import get_access_token_model, get_application_model
 from rest_framework.test import APIClient
 
+from audit.models import AuditEvent
 from entitlements.models import (
     OAuthClientPolicy,
     OAuthClientProductGrant,
@@ -34,7 +35,7 @@ class OIDCProviderTests(TestCase):
 
         jwks = self.client.get("/o/.well-known/jwks.json")
         self.assertEqual(jwks.status_code, 200)
-        self.assertTrue(jwks.json()["keys"])
+        self.assertGreaterEqual(len(jwks.json()["keys"]), 2)
 
 
 class AccessContextTests(TestCase):
@@ -383,3 +384,7 @@ class AccessContextTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["state"], "pending")
         self.assertTrue(response.data["invitation_sent"])
+        event = AuditEvent.objects.get(event_type="identity.invitation.created")
+        self.assertEqual(event.actor_type, AuditEvent.ActorType.OAUTH_CLIENT)
+        self.assertEqual(event.target_id, response.data["user"]["id"])
+        self.assertTrue(event.oauth_client_id)

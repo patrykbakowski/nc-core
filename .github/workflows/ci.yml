@@ -40,13 +40,14 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements.txt
-      - name: Generate ephemeral OIDC signing key
+      - name: Generate ephemeral OIDC signing keys
         shell: bash
         run: |
+          openssl genrsa -out /tmp/qm-oidc-active.pem 2048
+          openssl genrsa -out /tmp/qm-oidc-inactive.pem 2048
           {
-            echo 'QM_OIDC_RSA_PRIVATE_KEY<<EOF'
-            openssl genrsa 2048
-            echo 'EOF'
+            echo 'QM_OIDC_RSA_PRIVATE_KEY_FILE=/tmp/qm-oidc-active.pem'
+            echo 'QM_OIDC_RSA_PRIVATE_KEYS_INACTIVE_FILES=/tmp/qm-oidc-inactive.pem'
             echo 'QM_OIDC_ISSUER=https://identity.test/o'
           } >> "$GITHUB_ENV"
       - run: python manage.py makemigrations --check --dry-run

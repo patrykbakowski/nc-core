@@ -145,3 +145,20 @@ The current branch adds:
 - no impersonation and no user session issuance.
 
 This becomes the canonical backend authorization check for product jobs and server-side workflows.
+
+
+## Hardening slice — audit + key rotation
+
+Current branch: `feature/qm-identity-audit-key-rotation`.
+
+Adds:
+
+- dedicated append-only `AuditEvent` model for central identity/access mutations;
+- service-provisioning audit events keyed to the OAuth client;
+- mirrored audit events for privileged changes through Django admin;
+- OIDC signing-key overlap using DOT 3.4.1 `OIDC_RSA_PRIVATE_KEYS_INACTIVE`;
+- file-based inactive-key configuration via `QM_OIDC_RSA_PRIVATE_KEYS_INACTIVE_FILES`;
+- CI verification that JWKS publishes active + inactive keys;
+- documented normal and emergency signing-key rotation procedures.
+
+This does not rotate the current staging key by itself.

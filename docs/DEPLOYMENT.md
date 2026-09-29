@@ -134,3 +134,51 @@ For each product:
 7. leave fine-grained product permissions in the product.
 
 See `IDENTITY_INTEGRATION.md` for the application-side contract.
+
+
+## OIDC signing-key rotation
+
+QM Identity supports an overlap window during RSA signing-key rotation.
+
+Environment:
+
+```text
+QM_OIDC_RSA_PRIVATE_KEY_FILE=/run/secrets/qm_oidc_active.pem
+QM_OIDC_RSA_PRIVATE_KEYS_INACTIVE_FILES=/run/secrets/qm_oidc_previous.pem
+```
+
+The active key signs new ID tokens. Keys listed in `QM_OIDC_RSA_PRIVATE_KEYS_INACTIVE_FILES` are not used for signing, but remain published in JWKS so clients can verify tokens issued before the cutover.
+
+Safe rotation procedure:
+
+1. Generate a new RSA private key outside the repository.
+2. Keep the current active key unchanged as the rollback copy.
+3. Deploy the new key as `QM_OIDC_RSA_PRIVATE_KEY_FILE`.
+4. Move the former active key path into `QM_OIDC_RSA_PRIVATE_KEYS_INACTIVE_FILES`.
+5. Restart QM Identity.
+6. Verify health, OIDC discovery and that JWKS exposes both keys.
+7. Complete a fresh Authorization Code + PKCE login from at least one product.
+8. Keep the former key in the inactive list for at least the maximum lifetime of previously issued ID tokens plus JWKS cache overlap.
+9. Remove the former key from the inactive list only after that overlap window.
+10. Restart and verify JWKS again.
+
+Do not rotate the issuer URL, OAuth client IDs or client secrets as part of signing-key rotation unless separately required. Access tokens stored/validated by the authorization server are a separate concern from ID-token signature verification.
+
+Emergency key compromise is different: replace the active key immediately, remove the compromised key from JWKS instead of honoring an overlap, and force reauthentication where needed.
+
+## Identity/access audit
+
+QM Identity keeps a dedicated `AuditEvent` stream for central identity/access mutations that happen through service APIs or the QM admin surface.
+
+Current coverage:
+
+- central account invitation creation/resend performed by OAuth service clients;
+- creation/change/deletion of identity/access objects through Django admin;
+- actor type and actor user or OAuth client ID;
+- target model and ID;
+- organization/product context when applicable;
+- structured metadata for the mutation.
+
+The audit table is append-only through the admin UI: add/change/delete are disabled for `AuditEvent` itself.
+
+Django's own `django_admin_log` remains available as a second admin-level trace. Product-domain events still belong to each product and must not be copied wholesale into QM Identity.

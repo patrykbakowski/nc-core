@@ -254,3 +254,18 @@ Only when justified:
 See `docs/IDENTITY_INTEGRATION.md`.
 
 New products must integrate against that contract rather than create another password store or private interpretation of roles.
+
+
+## Identity/access audit
+
+QM Identity owns a narrow audit stream for changes to identity and coarse access, not product activity.
+
+The central audit records privileged mutations made through the QM admin surface and central service APIs. It captures the actor, target, tenant/product context and structured metadata. Product-specific evidence remains inside the product.
+
+This complements Django Admin's built-in log and provides one queryable stream for central identity/access changes.
+
+## Signing-key lifecycle
+
+OIDC signing keys are deployment secrets. QM Identity supports one active signing key plus inactive previous keys published in JWKS during rotation. New tokens use only the active key; previous keys exist solely to verify tokens issued before the cutover.
+
+See `docs/DEPLOYMENT.md` for the rotation procedure.

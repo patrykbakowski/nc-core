@@ -182,3 +182,33 @@ Current coverage:
 The audit table is append-only through the admin UI: add/change/delete are disabled for `AuditEvent` itself.
 
 Django's own `django_admin_log` remains available as a second admin-level trace. Product-domain events still belong to each product and must not be copied wholesale into QM Identity.
+
+
+## Authentication throttling
+
+QM Identity uses a PostgreSQL-backed fixed-window throttle for public credential-entry endpoints. It is shared across Gunicorn workers and does not depend on per-process memory.
+
+Covered endpoints:
+
+- central browser login;
+- REST login endpoint;
+- central password-reset request.
+
+The throttle key stores no raw IP address or e-mail. It stores an HMAC fingerprint derived from client IP + normalized identifier using the Django secret key.
+
+Default environment values:
+
+```text
+QM_LOGIN_RATE_LIMIT=10
+QM_LOGIN_RATE_WINDOW_SECONDS=300
+QM_PASSWORD_RESET_RATE_LIMIT=5
+QM_PASSWORD_RESET_RATE_WINDOW_SECONDS=900
+```
+
+The browser and REST login endpoints intentionally share the same `login` scope, so switching endpoints does not reset the attempt budget.
+
+Client IP resolution prefers Cloudflare `CF-Connecting-IP`, then the first `X-Forwarded-For` value, then `REMOTE_ADDR`. This assumes the application remains reachable only through the trusted local Nginx/Cloudflare path or localhost binding. Do not expose the Gunicorn origin directly to untrusted networks while trusting forwarded headers.
+
+A throttled request returns HTTP 429 and a `Retry-After` header.
+
+This is deliberately throttling rather than permanent account lockout. A global account-only lockout would let an attacker deny service to a known e-mail address.

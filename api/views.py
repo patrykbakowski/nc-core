@@ -5,7 +5,7 @@ from django.db import connection, transaction
 from django.shortcuts import get_object_or_404
 from oauth2_provider.contrib.rest_framework import OAuth2Authentication
 from rest_framework import status
-from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied, Throttled
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -14,6 +14,7 @@ from audit.service import record_oauth_event
 from entitlements.models import ProductEntitlement
 from organizations.models import Membership, Organization
 from users.invitations import invitation_path
+from users.security import consume_auth_attempt
 from .client_policy import (
     active_entitled_organization_ids,
     oauth_client_allowed_products,
@@ -107,6 +108,16 @@ class LoginView(APIView):
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data["email"].strip().lower()
         password = serializer.validated_data["password"]
+
+        throttle = consume_auth_attempt(
+            request,
+            "login",
+            email,
+            limit=settings.QM_LOGIN_RATE_LIMIT,
+            window_seconds=settings.QM_LOGIN_RATE_WINDOW_SECONDS,
+        )
+        if not throttle.allowed:
+            raise Throttled(wait=throttle.retry_after)
 
         authenticated = authenticate(request, email=email, password=password)
         if not authenticated:

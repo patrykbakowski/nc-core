@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from audit.admin import IdentityAuditAdminMixin
+
 from .models import (
     OAuthClientPolicy,
     OAuthClientProductGrant,
@@ -8,7 +10,7 @@ from .models import (
 
 
 @admin.register(ProductEntitlement)
-class ProductEntitlementAdmin(admin.ModelAdmin):
+class ProductEntitlementAdmin(IdentityAuditAdminMixin, admin.ModelAdmin):
     list_display = (
         "organization",
         "product_id",
@@ -31,7 +33,7 @@ class OAuthClientProductGrantInline(admin.TabularInline):
 
 
 @admin.register(OAuthClientPolicy)
-class OAuthClientPolicyAdmin(admin.ModelAdmin):
+class OAuthClientPolicyAdmin(IdentityAuditAdminMixin, admin.ModelAdmin):
     list_display = (
         "name",
         "application_client_id",
@@ -46,7 +48,7 @@ class OAuthClientPolicyAdmin(admin.ModelAdmin):
 
 
 @admin.register(OAuthClientProductGrant)
-class OAuthClientProductGrantAdmin(admin.ModelAdmin):
+class OAuthClientProductGrantAdmin(IdentityAuditAdminMixin, admin.ModelAdmin):
     list_display = ("client_policy", "product_id", "created_at")
     list_filter = ("product_id",)
     search_fields = (

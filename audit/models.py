@@ -31,9 +31,9 @@ class AuditEvent(models.Model):
     class Meta:
         ordering = ("-occurred_at",)
         indexes = [
-            models.Index(fields=["event_type", "occurred_at"]),
-            models.Index(fields=["oauth_client_id", "occurred_at"]),
-            models.Index(fields=["organization_id", "occurred_at"]),
+            models.Index(fields=["event_type", "occurred_at"], name="audit_event_type_at_idx"),
+            models.Index(fields=["oauth_client_id", "occurred_at"], name="audit_client_at_idx"),
+            models.Index(fields=["organization_id", "occurred_at"], name="audit_org_at_idx"),
         ]
 
     def __str__(self):

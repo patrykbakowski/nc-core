@@ -13,6 +13,11 @@ from rest_framework.views import APIView
 from entitlements.models import ProductEntitlement
 from organizations.models import Membership, Organization
 from users.invitations import invitation_path
+from .client_policy import (
+    active_entitled_organization_ids,
+    oauth_client_allowed_products,
+    require_oauth_client_product,
+)
 from .permissions import (
     HasQMAccessScopeOrSession,
     HasQMProvisionScope,
@@ -128,6 +133,20 @@ class MeView(APIView):
             .select_related("organization")
             .order_by("organization__name")
         )
+
+        token = getattr(request, "auth", None)
+        if token is not None:
+            scopes = set((getattr(token, "scope", "") or "").split())
+            if "qm.access" not in scopes:
+                memberships = memberships.none()
+            else:
+                allowed_products = oauth_client_allowed_products(request)
+                memberships = memberships.filter(
+                    organization_id__in=active_entitled_organization_ids(
+                        allowed_products
+                    )
+                )
+
         return Response(
             {
                 "user": user_payload(request.user),
@@ -153,10 +172,12 @@ class AccessContextView(APIView):
     def get(self, request):
         serializer = AccessContextQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
+        product = serializer.validated_data["product"]
+        require_oauth_client_product(request, product)
         membership, entitlement = _resolve_access_context(
             request.user,
             serializer.validated_data["organization_id"],
-            serializer.validated_data["product"],
+            product,
         )
         return Response(_access_context_payload(request.user, membership, entitlement))
 
@@ -168,6 +189,8 @@ class ServiceAccessContextView(APIView):
     def get(self, request):
         serializer = ServiceAccessContextQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
+        product = serializer.validated_data["product"]
+        require_oauth_client_product(request, product)
 
         user = get_object_or_404(
             User,
@@ -178,7 +201,7 @@ class ServiceAccessContextView(APIView):
         membership, entitlement = _resolve_access_context(
             user,
             serializer.validated_data["organization_id"],
-            serializer.validated_data["product"],
+            product,
         )
         return Response(_access_context_payload(user, membership, entitlement))
 

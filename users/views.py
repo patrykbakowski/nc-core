@@ -1,7 +1,7 @@
 from django.conf import settings
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, views as auth_views
 from django.contrib.auth.forms import SetPasswordForm
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
@@ -9,6 +9,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 
 from .invitations import invitation_tokens
+from .security import consume_auth_attempt
 
 User = get_user_model()
 
@@ -49,3 +50,48 @@ def invitation_complete(request):
         "registration/invitation_complete.html",
         {"login_url": settings.LOGIN_URL},
     )
+
+
+
+def _rate_limited_response(retry_after):
+    response = HttpResponse(
+        "Too many requests. Try again later.",
+        status=429,
+        content_type="text/plain; charset=utf-8",
+    )
+    response["Retry-After"] = str(retry_after)
+    return response
+
+
+class QMLoginView(auth_views.LoginView):
+    def post(self, request, *args, **kwargs):
+        identifier = (
+            request.POST.get("username")
+            or request.POST.get("email")
+            or ""
+        )
+        result = consume_auth_attempt(
+            request,
+            "login",
+            identifier,
+            limit=settings.QM_LOGIN_RATE_LIMIT,
+            window_seconds=settings.QM_LOGIN_RATE_WINDOW_SECONDS,
+        )
+        if not result.allowed:
+            return _rate_limited_response(result.retry_after)
+        return super().post(request, *args, **kwargs)
+
+
+class QMPasswordResetView(auth_views.PasswordResetView):
+    def post(self, request, *args, **kwargs):
+        identifier = request.POST.get("email") or ""
+        result = consume_auth_attempt(
+            request,
+            "password_reset",
+            identifier,
+            limit=settings.QM_PASSWORD_RESET_RATE_LIMIT,
+            window_seconds=settings.QM_PASSWORD_RESET_RATE_WINDOW_SECONDS,
+        )
+        if not result.allowed:
+            return _rate_limited_response(result.retry_after)
+        return super().post(request, *args, **kwargs)

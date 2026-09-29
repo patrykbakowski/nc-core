@@ -20,6 +20,7 @@ INSTALLED_APPS = [
     "users",
     "organizations",
     "entitlements",
+    "audit",
     "api",
 ]
 

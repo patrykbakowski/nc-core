@@ -32,14 +32,14 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="auditevent",
-            index=models.Index(fields=["event_type", "occurred_at"], name="audit_audit_event_t_65aba1_idx"),
+            index=models.Index(fields=["event_type", "occurred_at"], name="audit_event_type_at_idx"),
         ),
         migrations.AddIndex(
             model_name="auditevent",
-            index=models.Index(fields=["oauth_client_id", "occurred_at"], name="audit_audit_oauth_c_61d91a_idx"),
+            index=models.Index(fields=["oauth_client_id", "occurred_at"], name="audit_client_at_idx"),
         ),
         migrations.AddIndex(
             model_name="auditevent",
-            index=models.Index(fields=["organization_id", "occurred_at"], name="audit_audit_organiz_eb1fe8_idx"),
+            index=models.Index(fields=["organization_id", "occurred_at"], name="audit_org_at_idx"),
         ),
     ]

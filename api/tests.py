@@ -2,7 +2,7 @@ from datetime import timedelta
 import uuid
 
 from django.contrib.auth import authenticate, get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from oauth2_provider.models import get_access_token_model, get_application_model
 from rest_framework.test import APIClient
@@ -167,6 +167,28 @@ class AccessContextTests(TestCase):
             format="json",
         )
         self.assertIn(response.status_code, (401, 403))
+
+    @override_settings(
+        QM_LOGIN_RATE_LIMIT=2,
+        QM_LOGIN_RATE_WINDOW_SECONDS=300,
+    )
+    def test_api_login_is_throttled(self):
+        for _ in range(2):
+            response = self.client.post(
+                "/api/v1/auth/login/",
+                {"email": self.user.email, "password": "wrong"},
+                format="json",
+                REMOTE_ADDR="203.0.113.12",
+            )
+            self.assertIn(response.status_code, (401, 403))
+
+        response = self.client.post(
+            "/api/v1/auth/login/",
+            {"email": self.user.email, "password": "wrong"},
+            format="json",
+            REMOTE_ADDR="203.0.113.12",
+        )
+        self.assertEqual(response.status_code, 429)
 
     def test_valid_zgodomat_context(self):
         self.login()

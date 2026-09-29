@@ -269,3 +269,12 @@ This complements Django Admin's built-in log and provides one queryable stream f
 OIDC signing keys are deployment secrets. QM Identity supports one active signing key plus inactive previous keys published in JWKS during rotation. New tokens use only the active key; previous keys exist solely to verify tokens issued before the cutover.
 
 See `docs/DEPLOYMENT.md` for the rotation procedure.
+
+
+## Authentication abuse controls
+
+Public login and password-reset entry points use a PostgreSQL-backed shared throttle. The key is an HMAC of client IP + normalized identifier, so raw e-mail/IP values are not stored in throttle buckets.
+
+Browser login and REST login share one scope. Password reset has a separate, stricter scope.
+
+The current design intentionally avoids a global account-only lockout because it would create a trivial denial-of-service primitive against known user e-mails.

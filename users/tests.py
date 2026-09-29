@@ -6,11 +6,11 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from entitlements.models import ProductEntitlement
 from organizations.models import Membership, Organization
-from .models import ExternalIdentity
+from .models import AuthThrottleBucket, ExternalIdentity
 
 User = get_user_model()
 
@@ -130,3 +130,58 @@ class IdentitySnapshotImportTests(TestCase):
             "42",
         )
         self.assertEqual(Organization.objects.get(pk=organization_id).slug, "legacy-org")
+
+
+
+class AuthThrottleTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="login@example.com",
+            password="correct horse battery staple",
+        )
+
+    @override_settings(
+        QM_LOGIN_RATE_LIMIT=2,
+        QM_LOGIN_RATE_WINDOW_SECONDS=300,
+    )
+    def test_browser_login_is_throttled_across_attempts(self):
+        for _ in range(2):
+            response = self.client.post(
+                "/accounts/login/",
+                {"username": self.user.email, "password": "wrong password"},
+                REMOTE_ADDR="203.0.113.10",
+            )
+            self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(
+            "/accounts/login/",
+            {"username": self.user.email, "password": "wrong password"},
+            REMOTE_ADDR="203.0.113.10",
+        )
+        self.assertEqual(response.status_code, 429)
+        self.assertIn("Retry-After", response.headers)
+        self.assertEqual(
+            AuthThrottleBucket.objects.filter(scope="login").count(),
+            1,
+        )
+
+    @override_settings(
+        QM_PASSWORD_RESET_RATE_LIMIT=2,
+        QM_PASSWORD_RESET_RATE_WINDOW_SECONDS=900,
+    )
+    def test_password_reset_is_throttled_without_account_enumeration(self):
+        for _ in range(2):
+            response = self.client.post(
+                "/accounts/password-reset/",
+                {"email": "missing@example.com"},
+                REMOTE_ADDR="203.0.113.11",
+            )
+            self.assertEqual(response.status_code, 302)
+
+        response = self.client.post(
+            "/accounts/password-reset/",
+            {"email": "missing@example.com"},
+            REMOTE_ADDR="203.0.113.11",
+        )
+        self.assertEqual(response.status_code, 429)
+        self.assertIn("Retry-After", response.headers)

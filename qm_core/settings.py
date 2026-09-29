@@ -101,6 +101,13 @@ QM_ACCOUNT_PUBLIC_ORIGIN = os.getenv("QM_ACCOUNT_PUBLIC_ORIGIN", "http://localho
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
 EMAIL_FILE_PATH = os.getenv("EMAIL_FILE_PATH", str(BASE_DIR / "mail"))
 
+QM_LOGIN_RATE_LIMIT = int(os.getenv("QM_LOGIN_RATE_LIMIT", "10"))
+QM_LOGIN_RATE_WINDOW_SECONDS = int(os.getenv("QM_LOGIN_RATE_WINDOW_SECONDS", "300"))
+QM_PASSWORD_RESET_RATE_LIMIT = int(os.getenv("QM_PASSWORD_RESET_RATE_LIMIT", "5"))
+QM_PASSWORD_RESET_RATE_WINDOW_SECONDS = int(
+    os.getenv("QM_PASSWORD_RESET_RATE_WINDOW_SECONDS", "900")
+)
+
 
 def _env_bool(name, default=False):
     raw = os.getenv(name)

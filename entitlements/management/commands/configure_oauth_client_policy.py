@@ -17,7 +17,12 @@ class Command(BaseCommand):
             "--product",
             action="append",
             default=[],
-            help="Add an allowed product slug. May be repeated.",
+            help="Allowed product slug. May be repeated.",
+        )
+        parser.add_argument(
+            "--replace-products",
+            action="store_true",
+            help="Make --product values the exact product allowlist, removing old grants.",
         )
         provisioning = parser.add_mutually_exclusive_group()
         provisioning.add_argument("--enable-provision", action="store_true")
@@ -65,11 +70,20 @@ class Command(BaseCommand):
         if changed:
             policy.save(update_fields=changed + ["updated_at"])
 
+        desired_products = {
+            product.strip()
+            for product in options["product"]
+            if product and product.strip()
+        }
+
+        removed = []
+        if options["replace_products"]:
+            stale = policy.product_grants.exclude(product_id__in=desired_products)
+            removed = list(stale.values_list("product_id", flat=True))
+            stale.delete()
+
         granted = []
-        for product in options["product"]:
-            product = product.strip()
-            if not product:
-                continue
+        for product in sorted(desired_products):
             _, grant_created = OAuthClientProductGrant.objects.get_or_create(
                 client_policy=policy,
                 product_id=product,
@@ -77,11 +91,17 @@ class Command(BaseCommand):
             if grant_created:
                 granted.append(product)
 
+        current_products = list(
+            policy.product_grants.order_by("product_id").values_list(
+                "product_id", flat=True
+            )
+        )
         self.stdout.write(
             self.style.SUCCESS(
                 "OAuth client policy configured: "
                 f"created={created}, active={policy.is_active}, "
                 f"can_provision_accounts={policy.can_provision_accounts}, "
-                f"new_product_grants={granted}"
+                f"new_product_grants={granted}, removed_product_grants={removed}, "
+                f"products={current_products}"
             )
         )

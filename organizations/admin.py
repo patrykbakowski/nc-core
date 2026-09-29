@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from audit.admin import IdentityAuditAdminMixin
+
 from .models import Membership, Organization
 
 
@@ -12,7 +14,7 @@ class MembershipInline(admin.TabularInline):
 
 
 @admin.register(Organization)
-class OrganizationAdmin(admin.ModelAdmin):
+class OrganizationAdmin(IdentityAuditAdminMixin, admin.ModelAdmin):
     list_display = ("name", "slug", "status", "created_at")
     list_filter = ("status",)
     search_fields = ("name", "slug")
@@ -21,7 +23,7 @@ class OrganizationAdmin(admin.ModelAdmin):
 
 
 @admin.register(Membership)
-class MembershipAdmin(admin.ModelAdmin):
+class MembershipAdmin(IdentityAuditAdminMixin, admin.ModelAdmin):
     list_display = ("organization", "user", "role", "status", "created_at")
     list_filter = ("role", "status", "organization")
     search_fields = ("organization__name", "organization__slug", "user__email")

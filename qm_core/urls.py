@@ -4,20 +4,20 @@ from django.urls import include, path
 
 from api.views import HealthView
 from users.forms import QMPasswordResetForm
-from users.views import accept_invitation, invitation_complete
+from users.views import QMLoginView, QMPasswordResetView, accept_invitation, invitation_complete
 
 urlpatterns = [
     path("healthz/", HealthView.as_view(), name="healthz"),
     path("admin/", admin.site.urls),
     path(
         "accounts/login/",
-        auth_views.LoginView.as_view(template_name="registration/login.html"),
+        QMLoginView.as_view(template_name="registration/login.html"),
         name="login",
     ),
     path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
     path(
         "accounts/password-reset/",
-        auth_views.PasswordResetView.as_view(
+        QMPasswordResetView.as_view(
             form_class=QMPasswordResetForm,
             template_name="registration/password_reset_form.html",
             email_template_name="registration/password_reset_email.txt",

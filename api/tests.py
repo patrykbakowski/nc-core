@@ -35,7 +35,7 @@ class OIDCProviderTests(TestCase):
 
         jwks = self.client.get("/o/.well-known/jwks.json")
         self.assertEqual(jwks.status_code, 200)
-        self.assertTrue(jwks.json()["keys"])
+        self.assertGreaterEqual(len(jwks.json()["keys"]), 2)
 
 
 class AccessContextTests(TestCase):

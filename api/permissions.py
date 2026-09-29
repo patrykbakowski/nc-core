@@ -1,5 +1,7 @@
 from rest_framework.permissions import BasePermission
 
+from .client_policy import oauth_client_can_provision
+
 
 def _token_scopes(request):
     token = getattr(request, "auth", None)
@@ -32,7 +34,7 @@ class HasQMAccessScopeOrSession(BasePermission):
 
 
 class HasQMProvisionScope(BasePermission):
-    """Service OAuth token must explicitly carry qm.provision."""
+    """Service token needs qm.provision and an explicit client provisioning policy."""
 
     def has_permission(self, request, view):
         token = getattr(request, "auth", None)
@@ -40,6 +42,7 @@ class HasQMProvisionScope(BasePermission):
             token
             and getattr(token, "application_id", None)
             and "qm.provision" in _token_scopes(request)
+            and oauth_client_can_provision(request)
         )
 
 

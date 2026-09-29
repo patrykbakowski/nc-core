@@ -162,3 +162,25 @@ Adds:
 - documented normal and emergency signing-key rotation procedures.
 
 This does not rotate the current staging key by itself.
+
+
+## Hardening slice — auth throttling
+
+Current branch: `feature/qm-identity-auth-throttling`.
+
+Adds:
+
+- PostgreSQL-backed shared throttle buckets;
+- HMAC fingerprints instead of raw IP/e-mail storage;
+- one shared login budget across browser + REST login;
+- separate password-reset budget;
+- HTTP 429 + `Retry-After`;
+- configurable limits via environment;
+- tests for browser login, API login and password reset.
+
+Default limits:
+
+- login: 10 attempts / 300 seconds;
+- password reset: 5 attempts / 900 seconds.
+
+A global e-mail-only lockout is intentionally not implemented to avoid account-lockout DoS.

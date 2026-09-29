@@ -10,6 +10,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from audit.service import record_oauth_event
 from entitlements.models import ProductEntitlement
 from organizations.models import Membership, Organization
 from users.invitations import invitation_path
@@ -256,6 +257,13 @@ class InvitationProvisionView(APIView):
                 ),
                 settings.DEFAULT_FROM_EMAIL,
                 [user.email],
+            )
+            record_oauth_event(
+                request,
+                "identity.invitation.created" if created else "identity.invitation.resent",
+                target_type="users.user",
+                target_id=user.pk,
+                metadata={"state": "pending"},
             )
 
         return Response(

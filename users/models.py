@@ -81,3 +81,31 @@ class ExternalIdentity(models.Model):
 
     def __str__(self):
         return f"{self.provider}:{self.external_subject}"
+
+
+class AuthThrottleBucket(models.Model):
+    """Shared fixed-window throttle bucket without raw IP/e-mail storage."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    scope = models.CharField(max_length=32)
+    key_hash = models.CharField(max_length=64)
+    window_started_at = models.DateTimeField()
+    count = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["scope", "key_hash"],
+                name="uq_auth_throttle_scope_key",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["scope", "window_started_at"],
+                name="auth_throttle_scope_window_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.scope}:{self.key_hash[:12]}:{self.count}"

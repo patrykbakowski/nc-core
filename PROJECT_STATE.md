@@ -1,8 +1,8 @@
 # QM Core / QM Identity — Project State
 
-**Updated:** 2026-09-28  
+**Updated:** 2026-09-29  
 **Repository:** `patrykbakowski/nc-core` (legacy repository name)  
-**Status:** ACTIVE / cross-domain Identity + account lifecycle deployed to staging; service authorization in implementation
+**Status:** ACTIVE / CENTRAL IDENTITY AUTHORITY / LEAST-PRIVILEGE CLIENT POLICIES DEPLOYED TO STAGING
 
 ## Purpose
 
@@ -94,24 +94,7 @@ Required:
 
 No Google Cloud or external social provider is required.
 
-## Current next sequence
-
-1. final CI for PR #4;
-2. merge PR #4;
-3. deploy clean QM Identity staging with its own PostgreSQL database;
-4. export the legacy identity source and run importer dry-run;
-5. import and verify counts/UUIDs/password authentication;
-6. publish staging OIDC issuer over HTTPS;
-7. register Zgodomat as first real client and run browser Authorization Code + PKCE end to end;
-8. then add central password reset/invitations and onboard VerifiTest/Booking to the same contract.
-
-See:
-
-- `docs/ARCHITECTURE.md`;
-- `docs/API.md`;
-- `docs/IDENTITY_INTEGRATION.md`;
-- `docs/DEPLOYMENT.md`.
-
+## Current deployment\n\nClean staging runs at `https://identity-staging.neuroconnect.pl/` with OIDC issuer `https://identity-staging.neuroconnect.pl/o`. Current deployed source is `62286a2e2d9a142ac4fb895960de8a7d9c4c79f7`. Zgodomat and NC Platform are live staging consumers. VerifyTest and Booking reuse the same contract when implementation starts.\n\nSee:\n\n- `docs/ARCHITECTURE.md`;\n- `docs/API.md`;\n- `docs/IDENTITY_INTEGRATION.md`;\n- `docs/DEPLOYMENT.md`.\n
 
 ## Account lifecycle follow-up — 2026-09-28
 
@@ -145,3 +128,33 @@ The current branch adds:
 - no impersonation and no user session issuance.
 
 This becomes the canonical backend authorization check for product jobs and server-side workflows.
+
+## OAuth client least-privilege hardening — 2026-09-29
+
+PR #7 merged as `62286a2e2d9a142ac4fb895960de8a7d9c4c79f7` and is deployed to clean staging.
+
+Added:
+
+- `OAuthClientPolicy` and `OAuthClientProductGrant`;
+- exact per-client product allowlists;
+- explicit `can_provision_accounts`;
+- fail-closed behavior when client policy is missing/inactive;
+- product-policy enforcement on user and service access-context;
+- OAuth `/auth/me/` membership filtering;
+- provisioning requires both `qm.provision` and policy permission;
+- Django admin registration for identity/access models.
+
+Active staging policy:
+
+- Zgodomat web/service -> `zgodomat`; provisioning only on service client;
+- NC Platform web/service -> `neuroconnect`; provisioning only on service client;
+- old unused OAuth applications have no policy and therefore fail closed.
+
+Live verification:
+
+- NC Platform own-product access allowed; `zgodomat` cross-product access denied;
+- Zgodomat own-product access allowed; `neuroconnect` cross-product access returns 403;
+- provisioning an existing active account succeeds for both service clients without sending an invitation;
+- Identity public health remains 200.
+
+Pre-change staging backup: `/srv/qmanufacture/identity/staging/backups/qm_identity_staging-pre-client-policy-20260929.sql.gz`.
